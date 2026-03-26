@@ -2,7 +2,7 @@ import pandas as pd
 import random
 
 # Load dataset
-df = pd.read_csv("E-commerce comestic dataset.csv")
+df = pd.read_csv("diversified_ecommerce_dataset.csv")
 
 # Clean column names (important!)
 df.columns = df.columns.str.lower()
