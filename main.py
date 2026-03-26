@@ -1,133 +1,128 @@
 import pandas as pd
 import streamlit as st
-import nltk
-import string
-from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
 
-# Download once
-nltk.download('punkt')
-nltk.download('wordnet')
-
-lemmatizer = WordNetLemmatizer()
+# -----------------------------
+# PAGE SETUP
+# -----------------------------
+st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
+st.title("🛍️ ShopAssist AI Chatbot")
 
 # -----------------------------
-# Load Dataset
+# LOAD DATASET
 # -----------------------------
 df = pd.read_csv("diversified_ecommerce_dataset.csv")
+
+# Clean column names
 df.columns = df.columns.str.lower().str.replace(" ", "_")
 
 # -----------------------------
-# ML Training Data (INTENTS)
+# ML TRAINING DATA (INTENTS)
 # -----------------------------
-data = [
+training_data = [
     ("hello", "greeting"),
     ("hi", "greeting"),
     ("hey", "greeting"),
 
     ("cheap product", "cheap"),
     ("low price items", "cheap"),
+    ("budget products", "cheap"),
 
     ("best product", "best"),
     ("top items", "best"),
+    ("most popular", "best"),
 
     ("discount products", "discount"),
     ("any discount", "discount"),
 
-    ("show electronics", "category"),
-    ("find clothes", "category"),
+    ("electronics", "category"),
+    ("clothing", "category"),
+    ("beauty products", "category"),
 
     ("products in asia", "location"),
     ("items in europe", "location"),
 
-    ("stock level", "stock"),
-    ("low stock items", "stock")
+    ("low stock", "stock"),
+    ("stock level", "stock")
 ]
 
-X = [d[0] for d in data]
-y = [d[1] for d in data]
+X = [item[0] for item in training_data]
+y = [item[1] for item in training_data]
 
 # -----------------------------
-# Preprocessing
+# TRAIN MODEL
 # -----------------------------
-def preprocess(text):
-    text = text.lower()
-    text = ''.join([c for c in text if c not in string.punctuation])
-    tokens = nltk.word_tokenize(text)
-    tokens = [lemmatizer.lemmatize(w) for w in tokens]
-    return " ".join(tokens)
-
-X_processed = [preprocess(x) for x in X]
-
 vectorizer = CountVectorizer()
-X_vector = vectorizer.fit_transform(X_processed)
+X_vector = vectorizer.fit_transform(X)
 
 model = LogisticRegression()
 model.fit(X_vector, y)
 
 # -----------------------------
-# Predict Intent
+# INTENT PREDICTION
 # -----------------------------
 def predict_intent(user_input):
-    processed = preprocess(user_input)
-    vec = vectorizer.transform([processed])
+    vec = vectorizer.transform([user_input.lower()])
     return model.predict(vec)[0]
 
 # -----------------------------
-# Chatbot Logic
+# CHATBOT RESPONSE
 # -----------------------------
 def get_response(user_input):
     intent = predict_intent(user_input)
 
+    # Greeting
     if intent == "greeting":
-        return "Hello! How can I help you today? 😊"
+        return "Hello! 👋 How can I help you today?"
 
+    # Cheap products
     elif intent == "cheap":
-        cheap = df[df['price'] < df['price'].mean()]
-        return cheap[['product_name', 'price']].head(3)
+        result = df[df['price'] < df['price'].mean()].sort_values(by='price').head(3)
+        return result[['product_name', 'price']]
 
+    # Best products
     elif intent == "best":
-        best = df.sort_values(by='popularity_index', ascending=False).head(3)
-        return best[['product_name', 'popularity_index']]
+        result = df.sort_values(by='popularity_index', ascending=False).head(3)
+        return result[['product_name', 'popularity_index']]
 
+    # Discount products
     elif intent == "discount":
-        discount = df.sort_values(by='discount', ascending=False).head(3)
-        return discount[['product_name', 'discount']]
+        result = df.sort_values(by='discount', ascending=False).head(3)
+        return result[['product_name', 'discount']]
 
+    # Category search
     elif intent == "category":
-        for cat in df['category'].str.lower().unique():
-            if cat in user_input.lower():
-                results = df[df['category'].str.lower() == cat]
-                return results[['product_name', 'price']].head(3)
-        return "Please specify a category."
+        for cat in df['category'].dropna().unique():
+            if cat.lower() in user_input.lower():
+                result = df[df['category'].str.lower() == cat.lower()].head(3)
+                return result[['product_name', 'category', 'price']]
+        return "Please specify a valid category (e.g., electronics, clothing)."
 
+    # Location-based
     elif intent == "location":
-        location = user_input.split("in")[-1].strip()
-        results = df[df['customer_location'].str.contains(location, case=False, na=False)]
-        if not results.empty:
-            return results[['product_name', 'customer_location']].head(3)
-        return "No results found for that location."
+        if "in" in user_input:
+            location = user_input.split("in")[-1].strip()
+            result = df[df['customer_location'].str.contains(location, case=False, na=False)]
+            if not result.empty:
+                return result[['product_name', 'customer_location']].head(3)
+        return "Please specify a location (e.g., 'products in Asia')."
 
+    # Stock alert
     elif intent == "stock":
-        low = df[df['stock_level'] < 20]
-        return low[['product_name', 'stock_level']].head(3)
+        result = df[df['stock_level'] < 20].head(3)
+        return result[['product_name', 'stock_level']]
 
     else:
-        return "Sorry, I didn’t understand."
+        return "Sorry, I didn't understand. Try asking about products 😊"
 
 # -----------------------------
-# Streamlit Chat UI
+# CHAT UI
 # -----------------------------
-st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
-
-st.title("🛍️ ShopAssist AI Chatbot")
-
-# Chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display history
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if isinstance(msg["content"], str):
@@ -136,23 +131,23 @@ for msg in st.session_state.messages:
             st.dataframe(msg["content"])
 
 # User input
-user_input = st.chat_input("Ask me anything about products...")
+user_input = st.chat_input("Ask me about products...")
 
 if user_input:
     # Save user message
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Display user
+    # Display user message
     with st.chat_message("user"):
         st.write(user_input)
 
-    # Bot response
+    # Get response
     response = get_response(user_input)
 
-    # Save bot message
+    # Save bot response
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-    # Display bot
+    # Display bot response
     with st.chat_message("assistant"):
         if isinstance(response, str):
             st.write(response)
