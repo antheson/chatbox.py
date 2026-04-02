@@ -81,38 +81,80 @@ def recommend_products(user_input):
 # RESPONSE GENERATION (NATURAL)
 # -----------------------------
 def get_response(user_input):
+    text = user_input.lower()
+
+    # -----------------------------
+    # DEFAULT SETTINGS
+    # -----------------------------
+    limit = 5
+
+    # Extract number
+    for word in text.split():
+        if word.isdigit():
+            limit = min(int(word), 10)
+
+    # Extract category
+    category = None
+    for cat in df['category'].dropna().unique():
+        if cat.lower() in text:
+            category = cat
+
+    # Extract price
+    price_limit = None
+    words = text.split()
+    for i, w in enumerate(words):
+        if w.isdigit():
+            if i > 0 and words[i-1] in ["under", "below"]:
+                price_limit = float(w)
+
+    # -----------------------------
+    # DETECT INTENT (HYBRID 🔥)
+    # -----------------------------
     intent = predict_intent(user_input)
 
-    # Greeting
-    if intent == "greeting":
-        return "Hi there! 😊 Tell me what kind of product you're looking for — cheap, best, or discounted!"
+    # Backup keyword detection (VERY IMPORTANT)
+    if "cheap" in text or "low price" in text:
+        intent = "cheap"
+    elif "best" in text or "top" in text or "popular" in text:
+        intent = "best"
+    elif "discount" in text:
+        intent = "discount"
+    elif "recommend" in text or "show me" in text or "give me" in text:
+        intent = "recommend"
 
-    # Recommendation base
-    result = recommend_products(user_input)
+    # -----------------------------
+    # FILTER DATA
+    # -----------------------------
+    result = df.copy()
+
+    if category:
+        result = result[result['category'].str.lower() == category.lower()]
+
+    if price_limit:
+        result = result[result['price'] <= price_limit]
 
     if result.empty:
-        return "Hmm, I couldn't find anything matching your request. Try something like 'cheap electronics under 100'."
+        return "I couldn't find matching products. Try changing your filters 😊"
 
-    # Cheap
+    # -----------------------------
+    # RECOMMENDATION LOGIC
+    # -----------------------------
     if intent == "cheap":
-        result = result.sort_values(by='price').head(5)
-        return "Here are some budget-friendly picks for you 💰", result[['product_name', 'category', 'price']]
+        result = result.sort_values(by='price').head(limit)
+        return f"Here are {limit} budget-friendly products 💰", result[['product_name','category','price']]
 
-    # Best
     elif intent == "best":
-        result = result.sort_values(by='popularity_index', ascending=False).head(5)
-        return "These are the most popular products right now ⭐", result[['product_name', 'category', 'popularity_index']]
+        result = result.sort_values(by='popularity_index', ascending=False).head(limit)
+        return f"Here are the top {limit} most popular products ⭐", result[['product_name','category','popularity_index']]
 
-    # Discount
     elif intent == "discount":
-        result = result.sort_values(by='discount', ascending=False).head(5)
-        return "Check out these great deals 🔥", result[['product_name', 'category', 'discount']]
+        result = result.sort_values(by='discount', ascending=False).head(limit)
+        return f"Here are the top {limit} discounted products 🔥", result[['product_name','category','discount']]
 
-    # General recommendation
     else:
-        result = result.sort_values(by='popularity_index', ascending=False).head(5)
-        return "Here are some products you might like 👍", result[['product_name', 'category', 'price']]
-
+        # DEFAULT recommendation
+        result = result.sort_values(by='popularity_index', ascending=False).head(limit)
+        return f"Here are {limit} recommended products 👍", result[['product_name','category','price']]
 def display_products(df_result, label="Recommended Products"):
     if df_result.empty:
         st.warning("No products found.")
