@@ -169,7 +169,7 @@ if user_input:
         if isinstance(response, tuple):
             text, data = response
             st.write(text)
-            st.dataframe(data)
+            display_products(data, label="Top Recommendations")
             st.session_state.messages.append({"role": "assistant", "content": text})
             st.session_state.messages.append({"role": "assistant", "content": data})
         else:
