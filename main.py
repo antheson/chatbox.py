@@ -95,24 +95,51 @@ def get_response(user_input):
 
     # Cheap
     if intent == "cheap":
-        result = result.sort_values(by='price').head(5)
+        result = result.sort_values(by='price').head(8)
         return "Here are some budget-friendly picks for you 💰", result[['product_name', 'category', 'price']]
 
     # Best
     elif intent == "best":
-        result = result.sort_values(by='popularity_index', ascending=False).head(5)
+        result = result.sort_values(by='popularity_index', ascending=False).head(8)
         return "These are the most popular products right now ⭐", result[['product_name', 'category', 'popularity_index']]
 
     # Discount
     elif intent == "discount":
-        result = result.sort_values(by='discount', ascending=False).head(5)
+        result = result.sort_values(by='discount', ascending=False).head(8)
         return "Check out these great deals 🔥", result[['product_name', 'category', 'discount']]
 
     # General recommendation
     else:
-        result = result.sort_values(by='popularity_index', ascending=False).head(5)
+        result = result.sort_values(by='popularity_index', ascending=False).head(8)
         return "Here are some products you might like 👍", result[['product_name', 'category', 'price']]
 
+def display_products(df_result, label="Recommended Products"):
+    if df_result.empty:
+        st.warning("No products found.")
+        return
+
+    st.subheader(f"🏆 {label}")
+
+    for i, (_, row) in enumerate(df_result.iterrows(), start=1):
+        with st.container():
+            st.markdown(f"### #{i} 🛍️ {row.get('product_name', 'Unknown')}")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.write(f"📂 Category: {row.get('category', 'N/A')}")
+
+            with col2:
+                if 'price' in row:
+                    st.write(f"💰 Price: ${row.get('price', 'N/A')}")
+
+            with col3:
+                if 'popularity_index' in row:
+                    st.write(f"⭐ Popularity: {row.get('popularity_index', 'N/A')}")
+                elif 'discount' in row:
+                    st.write(f"🔥 Discount: {row.get('discount', 'N/A')}%")
+
+            st.divider()
 # -----------------------------
 # CHAT UI
 # -----------------------------
