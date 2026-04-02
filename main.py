@@ -95,22 +95,22 @@ def get_response(user_input):
 
     # Cheap
     if intent == "cheap":
-        result = result.sort_values(by='price').head(8)
+        result = result.sort_values(by='price').head(5)
         return "Here are some budget-friendly picks for you 💰", result[['product_name', 'category', 'price']]
 
     # Best
     elif intent == "best":
-        result = result.sort_values(by='popularity_index', ascending=False).head(8)
+        result = result.sort_values(by='popularity_index', ascending=False).head(5)
         return "These are the most popular products right now ⭐", result[['product_name', 'category', 'popularity_index']]
 
     # Discount
     elif intent == "discount":
-        result = result.sort_values(by='discount', ascending=False).head(8)
+        result = result.sort_values(by='discount', ascending=False).head(5)
         return "Check out these great deals 🔥", result[['product_name', 'category', 'discount']]
 
     # General recommendation
     else:
-        result = result.sort_values(by='popularity_index', ascending=False).head(8)
+        result = result.sort_values(by='popularity_index', ascending=False).head(5)
         return "Here are some products you might like 👍", result[['product_name', 'category', 'price']]
 
 def display_products(df_result, label="Recommended Products"):
