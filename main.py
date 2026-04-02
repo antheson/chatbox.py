@@ -7,52 +7,36 @@ from sklearn.linear_model import LogisticRegression
 # PAGE SETUP
 # -----------------------------
 st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
-st.title("🛍️ ShopAssist AI Chatbot")
+st.title("🛍️ ShopAssist AI - Recommendation Chatbot")
 
 # -----------------------------
 # LOAD DATASET
 # -----------------------------
 df = pd.read_csv("diversified_ecommerce_dataset.csv")
-
-# Clean column names
 df.columns = df.columns.str.lower().str.replace(" ", "_")
 
 # -----------------------------
-# ML TRAINING DATA (INTENTS)
+# TRAINING DATA (INTENTS)
 # -----------------------------
 training_data = [
     ("hello", "greeting"),
     ("hi", "greeting"),
-    ("hey", "greeting"),
 
-    ("cheap product", "cheap"),
+    ("recommend product", "recommend"),
+    ("suggest something", "recommend"),
+
+    ("cheap products", "cheap"),
     ("low price items", "cheap"),
-    ("budget products", "cheap"),
 
-    ("best product", "best"),
-    ("top items", "best"),
-    ("most popular", "best"),
+    ("best products", "best"),
+    ("top products", "best"),
 
-    ("discount products", "discount"),
-    ("any discount", "discount"),
-
-    ("electronics", "category"),
-    ("clothing", "category"),
-    ("beauty products", "category"),
-
-    ("products in asia", "location"),
-    ("items in europe", "location"),
-
-    ("low stock", "stock"),
-    ("stock level", "stock")
+    ("discount items", "discount")
 ]
 
-X = [item[0] for item in training_data]
-y = [item[1] for item in training_data]
+X = [x[0] for x in training_data]
+y = [x[1] for x in training_data]
 
-# -----------------------------
-# TRAIN MODEL
-# -----------------------------
 vectorizer = CountVectorizer()
 X_vector = vectorizer.fit_transform(X)
 
@@ -62,94 +46,80 @@ model.fit(X_vector, y)
 # -----------------------------
 # INTENT PREDICTION
 # -----------------------------
-def predict_intent(user_input):
-    vec = vectorizer.transform([user_input.lower()])
-    return model.predict(vec)[0]
+def predict_intent(text):
+    return model.predict(vectorizer.transform([text.lower()]))[0]
 
 # -----------------------------
-# CHATBOT RESPONSE
+# RECOMMENDATION ENGINE
 # -----------------------------
-def get_response(user_input):
-    intent = predict_intent(user_input)
+def recommend_products(user_input):
     text = user_input.lower()
 
-    # Greeting
-    if intent == "greeting":
-        return "Hello! 👋 I can recommend products based on price, category, or popularity!"
-
-    # -----------------------------
-    # SMART RECOMMENDATION ENGINE 🔥
-    # -----------------------------
-
-    # Extract price condition
+    # Extract price
     price_limit = None
-    words = text.split()
-    for i, w in enumerate(words):
-        if w.isdigit():
-            price_limit = float(w)
+    for word in text.split():
+        if word.isdigit():
+            price_limit = float(word)
 
     # Extract category
-    selected_category = None
+    category = None
     for cat in df['category'].dropna().unique():
         if cat.lower() in text:
-            selected_category = cat
+            category = cat
 
-    # Base dataset
     result = df.copy()
 
-    # Apply filters
-    if selected_category:
-        result = result[result['category'].str.lower() == selected_category.lower()]
+    if category:
+        result = result[result['category'].str.lower() == category.lower()]
 
     if price_limit:
         result = result[result['price'] <= price_limit]
 
-    # -----------------------------
-    # Recommendation Types
-    # -----------------------------
+    return result
 
-    # Cheap recommendation
-    if "cheap" in text or intent == "cheap":
+# -----------------------------
+# RESPONSE GENERATION (NATURAL)
+# -----------------------------
+def get_response(user_input):
+    intent = predict_intent(user_input)
+
+    # Greeting
+    if intent == "greeting":
+        return "Hi there! 😊 Tell me what kind of product you're looking for — cheap, best, or discounted!"
+
+    # Recommendation base
+    result = recommend_products(user_input)
+
+    if result.empty:
+        return "Hmm, I couldn't find anything matching your request. Try something like 'cheap electronics under 100'."
+
+    # Cheap
+    if intent == "cheap":
         result = result.sort_values(by='price').head(5)
-        return result[['product_name', 'category', 'price']]
+        return "Here are some budget-friendly picks for you 💰", result[['product_name', 'category', 'price']]
 
-    # Best recommendation
-    elif "best" in text or "top" in text or intent == "best":
+    # Best
+    elif intent == "best":
         result = result.sort_values(by='popularity_index', ascending=False).head(5)
-        return result[['product_name', 'category', 'popularity_index']]
+        return "These are the most popular products right now ⭐", result[['product_name', 'category', 'popularity_index']]
 
-    # Discount recommendation
-    elif "discount" in text or intent == "discount":
+    # Discount
+    elif intent == "discount":
         result = result.sort_values(by='discount', ascending=False).head(5)
-        return result[['product_name', 'category', 'discount']]
+        return "Check out these great deals 🔥", result[['product_name', 'category', 'discount']]
 
-    # Combined recommendation (A+)
-    elif selected_category or price_limit:
-        result = result.sort_values(by='popularity_index', ascending=False).head(5)
-        return result[['product_name', 'category', 'price', 'popularity_index']]
-
-    # Location-based
-    elif intent == "location":
-        if "in" in text:
-            location = text.split("in")[-1].strip()
-            result = df[df['customer_location'].str.contains(location, case=False, na=False)]
-            return result[['product_name', 'customer_location']].head(5)
-
-    # Stock alert
-    elif intent == "stock":
-        result = df[df['stock_level'] < 20].head(5)
-        return result[['product_name', 'stock_level']]
-
-    # Default
+    # General recommendation
     else:
-        return "Try asking:\n- cheap electronics\n- best products under 100\n- discount items\n- products in Asia"
+        result = result.sort_values(by='popularity_index', ascending=False).head(5)
+        return "Here are some products you might like 👍", result[['product_name', 'category', 'price']]
+
 # -----------------------------
 # CHAT UI
 # -----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
+# Show chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if isinstance(msg["content"], str):
@@ -157,26 +127,24 @@ for msg in st.session_state.messages:
         else:
             st.dataframe(msg["content"])
 
-# User input
-user_input = st.chat_input("Ask me about products...")
+# Input
+user_input = st.chat_input("Ask for recommendations...")
 
 if user_input:
-    # Save user message
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Display user message
     with st.chat_message("user"):
         st.write(user_input)
 
-    # Get response
     response = get_response(user_input)
 
-    # Save bot response
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-    # Display bot response
     with st.chat_message("assistant"):
-        if isinstance(response, str):
-            st.write(response)
+        if isinstance(response, tuple):
+            text, data = response
+            st.write(text)
+            st.dataframe(data)
+            st.session_state.messages.append({"role": "assistant", "content": text})
+            st.session_state.messages.append({"role": "assistant", "content": data})
         else:
-            st.dataframe(response)
+            st.write(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
