@@ -71,51 +71,78 @@ def predict_intent(user_input):
 # -----------------------------
 def get_response(user_input):
     intent = predict_intent(user_input)
+    text = user_input.lower()
 
     # Greeting
     if intent == "greeting":
-        return "Hello! 👋 How can I help you today?"
+        return "Hello! 👋 I can recommend products based on price, category, or popularity!"
 
-    # Cheap products
-    elif intent == "cheap":
-        result = df[df['price'] < df['price'].mean()].sort_values(by='price').head(3)
-        return result[['product_name', 'price']]
+    # -----------------------------
+    # SMART RECOMMENDATION ENGINE 🔥
+    # -----------------------------
 
-    # Best products
-    elif intent == "best":
-        result = df.sort_values(by='popularity_index', ascending=False).head(3)
-        return result[['product_name', 'popularity_index']]
+    # Extract price condition
+    price_limit = None
+    words = text.split()
+    for i, w in enumerate(words):
+        if w.isdigit():
+            price_limit = float(w)
 
-    # Discount products
-    elif intent == "discount":
-        result = df.sort_values(by='discount', ascending=False).head(3)
-        return result[['product_name', 'discount']]
+    # Extract category
+    selected_category = None
+    for cat in df['category'].dropna().unique():
+        if cat.lower() in text:
+            selected_category = cat
 
-    # Category search
-    elif intent == "category":
-        for cat in df['category'].dropna().unique():
-            if cat.lower() in user_input.lower():
-                result = df[df['category'].str.lower() == cat.lower()].head(3)
-                return result[['product_name', 'category', 'price']]
-        return "Please specify a valid category (e.g., electronics, clothing)."
+    # Base dataset
+    result = df.copy()
+
+    # Apply filters
+    if selected_category:
+        result = result[result['category'].str.lower() == selected_category.lower()]
+
+    if price_limit:
+        result = result[result['price'] <= price_limit]
+
+    # -----------------------------
+    # Recommendation Types
+    # -----------------------------
+
+    # Cheap recommendation
+    if "cheap" in text or intent == "cheap":
+        result = result.sort_values(by='price').head(5)
+        return result[['product_name', 'category', 'price']]
+
+    # Best recommendation
+    elif "best" in text or "top" in text or intent == "best":
+        result = result.sort_values(by='popularity_index', ascending=False).head(5)
+        return result[['product_name', 'category', 'popularity_index']]
+
+    # Discount recommendation
+    elif "discount" in text or intent == "discount":
+        result = result.sort_values(by='discount', ascending=False).head(5)
+        return result[['product_name', 'category', 'discount']]
+
+    # Combined recommendation (A+)
+    elif selected_category or price_limit:
+        result = result.sort_values(by='popularity_index', ascending=False).head(5)
+        return result[['product_name', 'category', 'price', 'popularity_index']]
 
     # Location-based
     elif intent == "location":
-        if "in" in user_input:
-            location = user_input.split("in")[-1].strip()
+        if "in" in text:
+            location = text.split("in")[-1].strip()
             result = df[df['customer_location'].str.contains(location, case=False, na=False)]
-            if not result.empty:
-                return result[['product_name', 'customer_location']].head(3)
-        return "Please specify a location (e.g., 'products in Asia')."
+            return result[['product_name', 'customer_location']].head(5)
 
     # Stock alert
     elif intent == "stock":
-        result = df[df['stock_level'] < 20].head(3)
+        result = df[df['stock_level'] < 20].head(5)
         return result[['product_name', 'stock_level']]
 
+    # Default
     else:
-        return "Sorry, I didn't understand. Try asking about products 😊"
-
+        return "Try asking:\n- cheap electronics\n- best products under 100\n- discount items\n- products in Asia"
 # -----------------------------
 # CHAT UI
 # -----------------------------
