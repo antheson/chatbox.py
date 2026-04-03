@@ -14,7 +14,7 @@ st.title("🛍️ ShopAssist AI - Recommendation Chatbot")
 if st.button("🗑️ Clear Chat"):
     st.session_state.messages = []
     st.rerun()
-    
+
 # -----------------------------
 # AUTO-SCROLL FUNCTION
 # -----------------------------
@@ -32,7 +32,7 @@ def auto_scroll():
         setTimeout(scrollToBottom, 100);
         </script>
     """, unsafe_allow_html=True)
-    
+
 # -----------------------------
 # LOAD DATASET
 # -----------------------------
@@ -234,7 +234,7 @@ def get_response(user_input):
     if intent == "greeting":
         return {
             "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!\n\n💡 Tip: I understand typos too!",
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!",
             "data": "SHOW_EXAMPLES"
         }
 
@@ -350,30 +350,37 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # Display chat history
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        content = msg["content"]
-        
-        # Check if content is a dictionary (our new format)
-        if isinstance(content, dict):
-            # Display the message
-            st.write(content["message"])
+chat_container = st.container()
+
+with chat_container:
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            content = msg["content"]
             
-            # Handle the data based on its type
-            data_value = content["data"]
-            response_type = content.get("type", "")
-            
-            # IMPORTANT: Check type BEFORE comparing
-            if response_type == "categories":
-                display_categories()
-            elif data_value is not None:
-                if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
-                    show_examples()
-                elif isinstance(data_value, pd.DataFrame):
-                    display_products(data_value, label="Top Recommendations")
-        else:
-            # Handle old string format
-            st.write(content)
+            # Check if content is a dictionary (our new format)
+            if isinstance(content, dict):
+                # Display the message
+                st.write(content["message"])
+                
+                # Handle the data based on its type
+                data_value = content["data"]
+                response_type = content.get("type", "")
+                
+                # IMPORTANT: Check type BEFORE comparing
+                if response_type == "categories":
+                    display_categories()
+                elif data_value is not None:
+                    if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
+                        show_examples()
+                    elif isinstance(data_value, pd.DataFrame):
+                        display_products(data_value, label="Top Recommendations")
+            else:
+                # Handle old string format
+                st.write(content)
+
+# Auto-scroll trigger - will run after each new message
+if st.session_state.messages:
+    auto_scroll()
 
 # User input
 user_input = st.chat_input("Ask for recommendations...")
@@ -419,3 +426,6 @@ if user_input:
                 "role": "assistant",
                 "content": str(response)
             })
+    
+    # Force rerun to trigger auto-scroll
+    st.rerun()
