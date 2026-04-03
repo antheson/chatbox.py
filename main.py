@@ -42,7 +42,11 @@ training_data = [
     ("top products", "best"),
     ("most popular", "best"),
 
-    ("discount items", "discount")
+    ("discount items", "discount"),
+    
+    ("show categories", "categories"),
+    ("what categories", "categories"),
+    ("list categories", "categories")
 ]
 
 X = [x[0] for x in training_data]
@@ -71,6 +75,8 @@ def show_examples():
 - discount items  
 - show me 5 cheap clothing  
 - recommend something  
+- show all categories  
+- what categories do you have?
 """)
 
 # -----------------------------
@@ -105,6 +111,35 @@ def display_products(df_result, label="Recommended Products"):
             st.divider()
 
 # -----------------------------
+# DISPLAY CATEGORIES (UI)
+# -----------------------------
+def display_categories():
+    """Display all available product categories"""
+    categories = df['category'].dropna().unique()
+    categories = sorted(categories)
+    
+    st.subheader("📚 Available Product Categories")
+    
+    # Create columns for better display
+    cols = st.columns(3)
+    for idx, category in enumerate(categories):
+        with cols[idx % 3]:
+            # Count products in each category
+            product_count = len(df[df['category'] == category])
+            st.write(f"• **{category}** ({product_count} products)")
+    
+    st.info(f"💡 Total: {len(categories)} categories available")
+    
+    # Optional: Show sample products from random category
+    with st.expander("🔍 Want to see sample products from a category?"):
+        selected_category = st.selectbox("Choose a category:", categories)
+        if selected_category:
+            sample_products = df[df['category'] == selected_category].head(3)
+            st.write(f"**Sample products in {selected_category}:**")
+            for _, product in sample_products.iterrows():
+                st.write(f"• {product['product_name']} - ${product.get('price', 'N/A')}")
+
+# -----------------------------
 # RESPONSE GENERATION
 # -----------------------------
 def get_response(user_input):
@@ -112,6 +147,10 @@ def get_response(user_input):
 
     # Predict intent
     intent = predict_intent(user_input)
+    
+    # Check for category intent first (before other intents)
+    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories"]):
+        intent = "categories"
 
     # Greeting
     if intent == "greeting":
@@ -127,6 +166,14 @@ def get_response(user_input):
             "type": "text",
             "message": "Here are some things you can ask me 😊",
             "data": "SHOW_EXAMPLES"
+        }
+    
+    # Show categories
+    if intent == "categories":
+        return {
+            "type": "categories",
+            "message": "Here are all the product categories available in our store! 🛍️",
+            "data": None
         }
 
     # -----------------------------
@@ -235,9 +282,12 @@ for msg in st.session_state.messages:
             
             # Handle the data based on its type
             data_value = content["data"]
+            response_type = content.get("type", "")
             
             # IMPORTANT: Check type BEFORE comparing
-            if data_value is not None:
+            if response_type == "categories":
+                display_categories()
+            elif data_value is not None:
                 if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                     show_examples()
                 elif isinstance(data_value, pd.DataFrame):
@@ -267,9 +317,12 @@ if user_input:
             
             # Handle the data based on its type
             data_value = response["data"]
+            response_type = response.get("type", "")
             
             # IMPORTANT: Check type BEFORE comparing
-            if data_value is not None:
+            if response_type == "categories":
+                display_categories()
+            elif data_value is not None:
                 if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                     show_examples()
                 elif isinstance(data_value, pd.DataFrame):
