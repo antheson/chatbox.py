@@ -49,10 +49,14 @@ X_vector = vectorizer.fit_transform(X)
 model = LogisticRegression()
 model.fit(X_vector, y)
 
-
+# -----------------------------
+# INTENT PREDICTION
+# -----------------------------
+def predict_intent(text):
+    return model.predict(vectorizer.transform([text.lower()]))[0]
 
 # -----------------------------
-# HELP WITH EXAMPLES QUES
+# SHOW EXAMPLE QUESTIONS
 # -----------------------------
 def show_examples():
     st.markdown("""
@@ -63,53 +67,53 @@ def show_examples():
 - show me 5 cheap clothing  
 - recommend something  
 """)
-    
-# -----------------------------
-# INTENT PREDICTION
-# -----------------------------
-def predict_intent(text):
-    return model.predict(vectorizer.transform([text.lower()]))[0]
 
 # -----------------------------
-# RECOMMENDATION ENGINE
+# DISPLAY PRODUCTS (UI)
 # -----------------------------
-def recommend_products(user_input):
-    text = user_input.lower()
+def display_products(df_result, label="Recommended Products"):
+    if df_result.empty:
+        st.warning("No products found.")
+        return
 
-    # Extract price
-    price_limit = None
-    for word in text.split():
-        if word.isdigit():
-            price_limit = float(word)
+    st.subheader(f"🏆 {label}")
 
-    # Extract category
-    category = None
-    for cat in df['category'].dropna().unique():
-        if cat.lower() in text:
-            category = cat
+    for i, (_, row) in enumerate(df_result.iterrows(), start=1):
+        with st.container():
+            st.markdown(f"### #{i} 🛍️ {row.get('product_name', 'Unknown')}")
 
-    result = df.copy()
+            col1, col2, col3 = st.columns(3)
 
-    if category:
-        result = result[result['category'].str.lower() == category.lower()]
+            with col1:
+                st.write(f"📂 Category: {row.get('category', 'N/A')}")
 
-    if price_limit:
-        result = result[result['price'] <= price_limit]
+            with col2:
+                if 'price' in row:
+                    st.write(f"💰 Price: ${row.get('price', 'N/A')}")
 
-    return result
+            with col3:
+                if 'popularity_index' in row:
+                    st.write(f"⭐ Popularity: {row.get('popularity_index', 'N/A')}")
+                elif 'discount' in row:
+                    st.write(f"🔥 Discount: {row.get('discount', 'N/A')}%")
+
+            st.divider()
 
 # -----------------------------
-# RESPONSE GENERATION (NATURAL)
+# RESPONSE GENERATION
 # -----------------------------
 def get_response(user_input):
     text = user_input.lower()
+
+    # Predict intent
+    intent = predict_intent(user_input)
 
     # Greeting
     if intent == "greeting":
         return "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES"
 
-    # Help intent
-    elif intent == "help":
+    # Help
+    if intent == "help":
         return "Here are some things you can ask me 😊", "SHOW_EXAMPLES"
 
     # -----------------------------
@@ -117,7 +121,6 @@ def get_response(user_input):
     # -----------------------------
     limit = 5
 
-    # Extract number
     for word in text.split():
         if word.isdigit():
             limit = min(int(word), 10)
@@ -137,12 +140,9 @@ def get_response(user_input):
                 price_limit = float(w)
 
     # -----------------------------
-    # DETECT INTENT (HYBRID 🔥)
+    # INTENT (HYBRID FIX)
     # -----------------------------
-    intent = predict_intent(user_input)
-
-    # Backup keyword detection (VERY IMPORTANT)
-    if "cheap" in text or "low price" in text:
+    if "cheap" in text:
         intent = "cheap"
     elif "best" in text or "top" in text or "popular" in text:
         intent = "best"
@@ -181,55 +181,29 @@ def get_response(user_input):
         return f"Here are the top {limit} discounted products 🔥", result[['product_name','category','discount']]
 
     else:
-        # DEFAULT recommendation
         result = result.sort_values(by='popularity_index', ascending=False).head(limit)
         return f"Here are {limit} recommended products 👍", result[['product_name','category','price']]
-def display_products(df_result, label="Recommended Products"):
-    if df_result.empty:
-        st.warning("No products found.")
-        return
 
-    st.subheader(f"🏆 {label}")
-
-    for i, (_, row) in enumerate(df_result.iterrows(), start=1):
-        with st.container():
-            st.markdown(f"### #{i} 🛍️ {row.get('product_name', 'Unknown')}")
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.write(f"📂 Category: {row.get('category', 'N/A')}")
-
-            with col2:
-                if 'price' in row:
-                    st.write(f"💰 Price: ${row.get('price', 'N/A')}")
-
-            with col3:
-                if 'popularity_index' in row:
-                    st.write(f"⭐ Popularity: {row.get('popularity_index', 'N/A')}")
-                elif 'discount' in row:
-                    st.write(f"🔥 Discount: {row.get('discount', 'N/A')}%")
-
-            st.divider()
 # -----------------------------
 # CHAT UI
 # -----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Show chat
+# Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if isinstance(msg["content"], str):
             st.write(msg["content"])
-        else:
-            st.dataframe(msg["content"])
 
-# Input
+# User input
 user_input = st.chat_input("Ask for recommendations...")
 
 if user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.session_state.messages.append({
+        "role": "user",
+        "content": user_input
+    })
 
     with st.chat_message("user"):
         st.write(user_input)
@@ -238,25 +212,25 @@ if user_input:
 
     with st.chat_message("assistant"):
 
-    if isinstance(response, tuple):
-        text, data = response
+        if isinstance(response, tuple):
+            text, data = response
 
-        st.write(text)
+            st.write(text)
 
-        if data == "SHOW_EXAMPLES":
-            show_examples()
+            if data == "SHOW_EXAMPLES":
+                show_examples()
+            else:
+                display_products(data, label="Top Recommendations")
+
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": text
+            })
+
         else:
-            display_products(data, label="Top Recommendations")
+            st.write(response)
 
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": text
-        })
-
-    else:
-        st.write(response)
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": response
-        })
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": response
+            })
