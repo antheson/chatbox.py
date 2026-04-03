@@ -128,11 +128,6 @@ def show_examples():
 - recommend something  
 - show all categories  
 - what categories do you have?
-
-### 🔤 Typo-friendly! Try:
-- cheep products (understands "cheap")
-- rekomend something (understands "recommend")
-- catagories (understands "categories")
 """)
 
 # -----------------------------
