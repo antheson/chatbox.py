@@ -115,11 +115,19 @@ def get_response(user_input):
 
     # Greeting
     if intent == "greeting":
-        return ("text", "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES")
+        return {
+            "type": "text",
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!",
+            "data": "SHOW_EXAMPLES"
+        }
 
     # Help
     if intent == "help":
-        return ("text", "Here are some things you can ask me 😊", "SHOW_EXAMPLES")
+        return {
+            "type": "text",
+            "message": "Here are some things you can ask me 😊",
+            "data": "SHOW_EXAMPLES"
+        }
 
     # -----------------------------
     # DEFAULT SETTINGS
@@ -168,26 +176,46 @@ def get_response(user_input):
         result = result[result['price'] <= price_limit]
 
     if result.empty:
-        return ("text", "I couldn't find matching products. Try changing your filters 😊", None)
+        return {
+            "type": "text",
+            "message": "I couldn't find matching products. Try changing your filters 😊",
+            "data": None
+        }
 
     # -----------------------------
     # RECOMMENDATION LOGIC
     # -----------------------------
     if intent == "cheap":
         result = result.sort_values(by='price').head(limit)
-        return ("dataframe", f"Here are {limit} budget-friendly products 💰", result[['product_name','category','price']])
+        return {
+            "type": "dataframe",
+            "message": f"Here are {limit} budget-friendly products 💰",
+            "data": result[['product_name','category','price']]
+        }
 
     elif intent == "best":
         result = result.sort_values(by='popularity_index', ascending=False).head(limit)
-        return ("dataframe", f"Here are the top {limit} most popular products ⭐", result[['product_name','category','popularity_index']])
+        return {
+            "type": "dataframe",
+            "message": f"Here are the top {limit} most popular products ⭐",
+            "data": result[['product_name','category','popularity_index']]
+        }
 
     elif intent == "discount":
         result = result.sort_values(by='discount', ascending=False).head(limit)
-        return ("dataframe", f"Here are the top {limit} discounted products 🔥", result[['product_name','category','discount']])
+        return {
+            "type": "dataframe",
+            "message": f"Here are the top {limit} discounted products 🔥",
+            "data": result[['product_name','category','discount']]
+        }
 
     else:
         result = result.sort_values(by='popularity_index', ascending=False).head(limit)
-        return ("dataframe", f"Here are {limit} recommended products 👍", result[['product_name','category','price']])
+        return {
+            "type": "dataframe",
+            "message": f"Here are {limit} recommended products 👍",
+            "data": result[['product_name','category','price']]
+        }
 
 # -----------------------------
 # CHAT UI
@@ -200,26 +228,22 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         content = msg["content"]
         
-        # Handle different message formats
+        # Check if content is a dictionary (our new format)
         if isinstance(content, dict):
-            # Old format - handle gracefully
-            if "text" in content:
-                st.write(content["text"])
-            if "data" in content and content["data"] is not None:
-                if content["data"] == "SHOW_EXAMPLES":
+            # Display the message
+            st.write(content["message"])
+            
+            # Handle the data based on its type
+            data_value = content["data"]
+            
+            # IMPORTANT: Check type BEFORE comparing
+            if data_value is not None:
+                if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                     show_examples()
-                elif isinstance(content["data"], pd.DataFrame):
-                    display_products(content["data"], label="Top Recommendations")
-        elif isinstance(content, tuple) and len(content) == 3:
-            # New format (type, text, data)
-            msg_type, msg_text, msg_data = content
-            st.write(msg_text)
-            if msg_data == "SHOW_EXAMPLES":
-                show_examples()
-            elif isinstance(msg_data, pd.DataFrame):
-                display_products(msg_data, label="Top Recommendations")
+                elif isinstance(data_value, pd.DataFrame):
+                    display_products(data_value, label="Top Recommendations")
         else:
-            # Just a string
+            # Handle old string format
             st.write(content)
 
 # User input
@@ -237,20 +261,24 @@ if user_input:
     response = get_response(user_input)
 
     with st.chat_message("assistant"):
-        if isinstance(response, tuple) and len(response) == 3:
-            response_type, text, data = response
+        if isinstance(response, dict):
+            # Display the message
+            st.write(response["message"])
             
-            st.write(text)
+            # Handle the data based on its type
+            data_value = response["data"]
             
-            if data == "SHOW_EXAMPLES":
-                show_examples()
-            elif isinstance(data, pd.DataFrame):
-                display_products(data, label="Top Recommendations")
+            # IMPORTANT: Check type BEFORE comparing
+            if data_value is not None:
+                if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
+                    show_examples()
+                elif isinstance(data_value, pd.DataFrame):
+                    display_products(data_value, label="Top Recommendations")
             
-            # Store the response in the new format
+            # Store the response
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": response  # Store as tuple (type, text, data)
+                "content": response
             })
         else:
             # Fallback for any other response format
