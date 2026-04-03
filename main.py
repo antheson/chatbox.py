@@ -173,15 +173,18 @@ if "messages" not in st.session_state:
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         content = m["content"]
-
+        
+        # FIX: Check if content is a dictionary or string
         if isinstance(content, dict):
+            # Assistant message (dictionary format)
             st.write(content["msg"])
-
-            if content["data"] == "EXAMPLE":
+            
+            if content.get("data") == "EXAMPLE":
                 show_examples()
-            elif isinstance(content["data"], pd.DataFrame):
+            elif isinstance(content.get("data"), pd.DataFrame):
                 display_products(content["data"])
         else:
+            # User message (string format)
             st.write(content)
 
 # Input
