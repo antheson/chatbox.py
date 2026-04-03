@@ -235,14 +235,26 @@ if user_input:
     response = get_response(user_input)
 
     with st.chat_message("assistant"):
-        if isinstance(response, tuple):
-    text, data = response
 
-    st.write(text)
+    if isinstance(response, tuple):
+        text, data = response
 
-    if data == "SHOW_EXAMPLES":
-        show_examples()
+        st.write(text)
+
+        if data == "SHOW_EXAMPLES":
+            show_examples()
+        else:
+            display_products(data, label="Top Recommendations")
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": text
+        })
+
     else:
-        display_products(data, label="Top Recommendations")
+        st.write(response)
 
-    st.session_state.messages.append({"role": "assistant", "content": text})
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": response
+        })
