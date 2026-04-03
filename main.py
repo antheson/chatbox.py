@@ -289,6 +289,12 @@ def get_response(user_input):
         intent = "discount"
     elif "recommend" in text or "recomend" in text or "rekomend" in text or "show me" in text or "give me" in text:
         intent = "recommend"
+        
+    elif "products" in text and not category:
+    return {
+        "msg": "Sure! 😊 What type of products are you looking for?\n\nYou can say:\n- cheap electronics\n- best clothing\n- products under 100",
+        "data": "EXAMPLE"
+    }
 
     # -----------------------------
     # FILTER DATA
