@@ -202,15 +202,20 @@ for msg in st.session_state.messages:
         
         # FIX: Check if content is a dictionary or string
         if isinstance(content, dict):
+            # Display the text message
             st.write(content["text"])
             
-            if content["data"] == "SHOW_EXAMPLES":
+            # Check what type of data we have
+            data_value = content["data"]
+            
+            if data_value == "SHOW_EXAMPLES":
                 show_examples()
-            elif content["data"] is not None and not isinstance(content["data"], str):
-                # This is a DataFrame
-                display_products(content["data"], label="Top Recommendations")
+            elif isinstance(data_value, pd.DataFrame):
+                # This is a DataFrame with product recommendations
+                display_products(data_value, label="Top Recommendations")
+            # If data_value is None or other types, just show the text
         else:
-            # This is a string
+            # This is a string response
             st.write(content)
 
 # User input
@@ -234,7 +239,7 @@ if user_input:
             
             if isinstance(data, str) and data == "SHOW_EXAMPLES":
                 show_examples()
-            else:
+            elif isinstance(data, pd.DataFrame):
                 display_products(data, label="Top Recommendations")
             
             st.session_state.messages.append({
@@ -245,9 +250,9 @@ if user_input:
                 }
             })
         else:
+            # Handle string response
             st.write(response)
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": response  # Store as string directly
             })
-            
