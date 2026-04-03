@@ -115,11 +115,11 @@ def get_response(user_input):
 
     # Greeting
     if intent == "greeting":
-        return "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES"
+        return ("text", "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES")
 
     # Help
     if intent == "help":
-        return "Here are some things you can ask me 😊", "SHOW_EXAMPLES"
+        return ("text", "Here are some things you can ask me 😊", "SHOW_EXAMPLES")
 
     # -----------------------------
     # DEFAULT SETTINGS
@@ -168,26 +168,26 @@ def get_response(user_input):
         result = result[result['price'] <= price_limit]
 
     if result.empty:
-        return "I couldn't find matching products. Try changing your filters 😊"
+        return ("text", "I couldn't find matching products. Try changing your filters 😊", None)
 
     # -----------------------------
     # RECOMMENDATION LOGIC
     # -----------------------------
     if intent == "cheap":
         result = result.sort_values(by='price').head(limit)
-        return f"Here are {limit} budget-friendly products 💰", result[['product_name','category','price']]
+        return ("dataframe", f"Here are {limit} budget-friendly products 💰", result[['product_name','category','price']])
 
     elif intent == "best":
         result = result.sort_values(by='popularity_index', ascending=False).head(limit)
-        return f"Here are the top {limit} most popular products ⭐", result[['product_name','category','popularity_index']]
+        return ("dataframe", f"Here are the top {limit} most popular products ⭐", result[['product_name','category','popularity_index']])
 
     elif intent == "discount":
         result = result.sort_values(by='discount', ascending=False).head(limit)
-        return f"Here are the top {limit} discounted products 🔥", result[['product_name','category','discount']]
+        return ("dataframe", f"Here are the top {limit} discounted products 🔥", result[['product_name','category','discount']])
 
     else:
         result = result.sort_values(by='popularity_index', ascending=False).head(limit)
-        return f"Here are {limit} recommended products 👍", result[['product_name','category','price']]
+        return ("dataframe", f"Here are {limit} recommended products 👍", result[['product_name','category','price']])
 
 # -----------------------------
 # CHAT UI
@@ -200,22 +200,26 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         content = msg["content"]
         
-        # FIX: Check if content is a dictionary or string
+        # Handle different message formats
         if isinstance(content, dict):
-            # Display the text message
-            st.write(content["text"])
-            
-            # Check what type of data we have
-            data_value = content["data"]
-            
-            if data_value == "SHOW_EXAMPLES":
+            # Old format - handle gracefully
+            if "text" in content:
+                st.write(content["text"])
+            if "data" in content and content["data"] is not None:
+                if content["data"] == "SHOW_EXAMPLES":
+                    show_examples()
+                elif isinstance(content["data"], pd.DataFrame):
+                    display_products(content["data"], label="Top Recommendations")
+        elif isinstance(content, tuple) and len(content) == 3:
+            # New format (type, text, data)
+            msg_type, msg_text, msg_data = content
+            st.write(msg_text)
+            if msg_data == "SHOW_EXAMPLES":
                 show_examples()
-            elif isinstance(data_value, pd.DataFrame):
-                # This is a DataFrame with product recommendations
-                display_products(data_value, label="Top Recommendations")
-            # If data_value is None or other types, just show the text
+            elif isinstance(msg_data, pd.DataFrame):
+                display_products(msg_data, label="Top Recommendations")
         else:
-            # This is a string response
+            # Just a string
             st.write(content)
 
 # User input
@@ -233,26 +237,25 @@ if user_input:
     response = get_response(user_input)
 
     with st.chat_message("assistant"):
-        if isinstance(response, tuple):
-            text, data = response
+        if isinstance(response, tuple) and len(response) == 3:
+            response_type, text, data = response
+            
             st.write(text)
             
-            if isinstance(data, str) and data == "SHOW_EXAMPLES":
+            if data == "SHOW_EXAMPLES":
                 show_examples()
             elif isinstance(data, pd.DataFrame):
                 display_products(data, label="Top Recommendations")
             
+            # Store the response in the new format
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": {
-                    "text": text,
-                    "data": data
-                }
+                "content": response  # Store as tuple (type, text, data)
             })
         else:
-            # Handle string response
-            st.write(response)
+            # Fallback for any other response format
+            st.write(str(response))
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": response  # Store as string directly
+                "content": str(response)
             })
