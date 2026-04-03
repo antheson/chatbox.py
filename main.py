@@ -199,17 +199,19 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         content = msg["content"]
-
-if isinstance(content, str):
-    st.write(content)
-
-elif isinstance(content, dict):
-    st.write(content["text"])
-
-    if content["data"] == "SHOW_EXAMPLES":
-        show_examples()
-    else:
-        display_products(content["data"], label="Top Recommendations")
+        
+        # FIX: Check if content is a dictionary or string
+        if isinstance(content, dict):
+            st.write(content["text"])
+            
+            if content["data"] == "SHOW_EXAMPLES":
+                show_examples()
+            elif content["data"] is not None and not isinstance(content["data"], str):
+                # This is a DataFrame
+                display_products(content["data"], label="Top Recommendations")
+        else:
+            # This is a string
+            st.write(content)
 
 # User input
 user_input = st.chat_input("Ask for recommendations...")
@@ -226,32 +228,26 @@ if user_input:
     response = get_response(user_input)
 
     with st.chat_message("assistant"):
-
         if isinstance(response, tuple):
             text, data = response
-
             st.write(text)
-
+            
             if isinstance(data, str) and data == "SHOW_EXAMPLES":
                 show_examples()
             else:
                 display_products(data, label="Top Recommendations")
-
+            
             st.session_state.messages.append({
-            "role": "assistant",
-            "content": {
-                "text": text,
-                "data": data
-            }
-        })
-
+                "role": "assistant",
+                "content": {
+                    "text": text,
+                    "data": data
+                }
+            })
         else:
             st.write(response)
-
             st.session_state.messages.append({
-    "role": "assistant",
-    "content": {
-        "text": response,
-        "data": None
-    }
-})
+                "role": "assistant",
+                "content": response  # Store as string directly
+            })
+            
