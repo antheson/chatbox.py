@@ -22,6 +22,11 @@ training_data = [
     ("hello", "greeting"),
     ("hi", "greeting"),
 
+    ("what can you do", "help"),
+    ("help me", "help"),
+    ("how to use", "help"),
+    ("what can i ask", "help"),
+
     ("recommend product", "recommend"),
     ("suggest something", "recommend"),
 
@@ -30,6 +35,7 @@ training_data = [
 
     ("best products", "best"),
     ("top products", "best"),
+    ("most popular", "best"),
 
     ("discount items", "discount")
 ]
@@ -43,6 +49,27 @@ X_vector = vectorizer.fit_transform(X)
 model = LogisticRegression()
 model.fit(X_vector, y)
 
+# Greeting
+if intent == "greeting":
+    return "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES"
+
+# Help intent
+elif intent == "help":
+    return "Here are some things you can ask me 😊", "SHOW_EXAMPLES"
+
+# -----------------------------
+# HELP WITH EXAMPLES QUES
+# -----------------------------
+def show_examples():
+    st.markdown("""
+### 💡 You can try asking:
+- cheap electronics under 100  
+- best products  
+- discount items  
+- show me 5 cheap clothing  
+- recommend something  
+""")
+    
 # -----------------------------
 # INTENT PREDICTION
 # -----------------------------
@@ -209,11 +236,13 @@ if user_input:
 
     with st.chat_message("assistant"):
         if isinstance(response, tuple):
-            text, data = response
-            st.write(text)
-            display_products(data, label="Top Recommendations")
-            st.session_state.messages.append({"role": "assistant", "content": text})
-            st.session_state.messages.append({"role": "assistant", "content": data})
-        else:
-            st.write(response)
-            st.session_state.messages.append({"role": "assistant", "content": response})
+    text, data = response
+
+    st.write(text)
+
+    if data == "SHOW_EXAMPLES":
+        show_examples()
+    else:
+        display_products(data, label="Top Recommendations")
+
+    st.session_state.messages.append({"role": "assistant", "content": text})
