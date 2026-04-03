@@ -236,7 +236,7 @@ if user_input:
 
     response = get_response(user_input)
 
-    with st.chat_message("assistant"):
+with st.chat_message("assistant"):
 
     if isinstance(response, tuple):
         text, data = response
