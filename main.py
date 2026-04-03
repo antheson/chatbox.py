@@ -49,13 +49,7 @@ X_vector = vectorizer.fit_transform(X)
 model = LogisticRegression()
 model.fit(X_vector, y)
 
-# Greeting
-if intent == "greeting":
-    return "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES"
 
-# Help intent
-elif intent == "help":
-    return "Here are some things you can ask me 😊", "SHOW_EXAMPLES"
 
 # -----------------------------
 # HELP WITH EXAMPLES QUES
@@ -109,6 +103,14 @@ def recommend_products(user_input):
 # -----------------------------
 def get_response(user_input):
     text = user_input.lower()
+
+    # Greeting
+    if intent == "greeting":
+        return "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!", "SHOW_EXAMPLES"
+
+    # Help intent
+    elif intent == "help":
+        return "Here are some things you can ask me 😊", "SHOW_EXAMPLES"
 
     # -----------------------------
     # DEFAULT SETTINGS
