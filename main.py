@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
+from difflib import get_close_matches
 
 # -----------------------------
 # PAGE SETUP
@@ -21,29 +22,77 @@ df = pd.read_csv("diversified_ecommerce_dataset.csv")
 df.columns = df.columns.str.lower().str.replace(" ", "_")
 
 # -----------------------------
+# TYPO CORRECTION FUNCTION
+# -----------------------------
+def correct_typo(word, word_list, cutoff=0.8):
+    """Correct typo in a word using difflib"""
+    if word in word_list:
+        return word
+    
+    matches = get_close_matches(word, word_list, n=1, cutoff=cutoff)
+    if matches:
+        return matches[0]
+    return word
+
+def correct_category_typo(user_input, categories):
+    """Check and correct category typos in user input"""
+    words = user_input.lower().split()
+    corrected_words = []
+    
+    for word in words:
+        # Check if this word might be a category (length > 3 to avoid correcting small words)
+        if len(word) > 3:
+            corrected = correct_typo(word, categories, cutoff=0.7)
+            corrected_words.append(corrected)
+        else:
+            corrected_words.append(word)
+    
+    return ' '.join(corrected_words)
+
+def correct_intent_typo(user_input):
+    """Correct typos in intent-related keywords"""
+    intent_keywords = {
+        'hello': ['hello', 'hllo', 'helo', 'hellp', 'hallow', 'halo'],
+        'help': ['help', 'halp', 'hlp', 'hepl', 'helpp'],
+        'cheap': ['cheap', 'cheep', 'chap', 'chep', 'cheapp'],
+        'best': ['best', 'bests', 'besst', 'bist', 'bested'],
+        'discount': ['discount', 'discont', 'dicount', 'discout', 'diskaunt'],
+        'categories': ['categories', 'catagories', 'categries', 'catgories', 'categorys'],
+        'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded']
+    }
+    
+    words = user_input.lower().split()
+    corrected_words = []
+    
+    for word in words:
+        corrected = word
+        for keyword, variations in intent_keywords.items():
+            if word in variations:
+                corrected = keyword
+                break
+        corrected_words.append(corrected)
+    
+    return ' '.join(corrected_words)
+
+# -----------------------------
 # TRAINING DATA (INTENTS)
 # -----------------------------
 training_data = [
     ("hello", "greeting"),
     ("hi", "greeting"),
-
+    ("hey", "greeting"),
     ("what can you do", "help"),
     ("help me", "help"),
     ("how to use", "help"),
     ("what can i ask", "help"),
-
     ("recommend product", "recommend"),
     ("suggest something", "recommend"),
-
     ("cheap products", "cheap"),
     ("low price items", "cheap"),
-
     ("best products", "best"),
     ("top products", "best"),
     ("most popular", "best"),
-
     ("discount items", "discount"),
-    
     ("show categories", "categories"),
     ("what categories", "categories"),
     ("list categories", "categories")
@@ -59,10 +108,12 @@ model = LogisticRegression()
 model.fit(X_vector, y)
 
 # -----------------------------
-# INTENT PREDICTION
+# INTENT PREDICTION WITH TYPO HANDLING
 # -----------------------------
 def predict_intent(text):
-    return model.predict(vectorizer.transform([text.lower()]))[0]
+    # First correct common typos in the input
+    corrected_text = correct_intent_typo(text)
+    return model.predict(vectorizer.transform([corrected_text.lower()]))[0]
 
 # -----------------------------
 # SHOW EXAMPLE QUESTIONS
@@ -77,6 +128,11 @@ def show_examples():
 - recommend something  
 - show all categories  
 - what categories do you have?
+
+### 🔤 Typo-friendly! Try:
+- cheep products (understands "cheap")
+- rekomend something (understands "recommend")
+- catagories (understands "categories")
 """)
 
 # -----------------------------
@@ -140,23 +196,32 @@ def display_categories():
                 st.write(f"• {product['product_name']} - ${product.get('price', 'N/A')}")
 
 # -----------------------------
-# RESPONSE GENERATION
+# RESPONSE GENERATION WITH TYPO HANDLING
 # -----------------------------
 def get_response(user_input):
-    text = user_input.lower()
+    # Apply typo correction to the entire input
+    categories_list = [cat.lower() for cat in df['category'].dropna().unique()]
+    
+    # Correct category typos first
+    corrected_input = correct_category_typo(user_input, categories_list)
+    
+    # Also correct intent typos
+    corrected_input = correct_intent_typo(corrected_input)
+    
+    text = corrected_input.lower()
 
     # Predict intent
-    intent = predict_intent(user_input)
+    intent = predict_intent(corrected_input)
     
-    # Check for category intent first (before other intents)
-    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories"]):
+    # Check for category intent first
+    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories", "catagories"]):
         intent = "categories"
 
     # Greeting
     if intent == "greeting":
         return {
             "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!",
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!\n\n💡 Tip: I understand typos too!",
             "data": "SHOW_EXAMPLES"
         }
 
@@ -185,30 +250,31 @@ def get_response(user_input):
         if word.isdigit():
             limit = min(int(word), 10)
 
-    # Extract category
+    # Extract category (with typo handling)
     category = None
     for cat in df['category'].dropna().unique():
-        if cat.lower() in text:
+        if cat.lower() in text or correct_typo(cat.lower(), text.split(), cutoff=0.7) in text:
             category = cat
+            break
 
     # Extract price
     price_limit = None
     words = text.split()
     for i, w in enumerate(words):
         if w.isdigit():
-            if i > 0 and words[i-1] in ["under", "below"]:
+            if i > 0 and words[i-1] in ["under", "below", "less", "than"]:
                 price_limit = float(w)
 
     # -----------------------------
-    # INTENT (HYBRID FIX)
+    # INTENT (HYBRID FIX WITH TYPO SUPPORT)
     # -----------------------------
-    if "cheap" in text:
+    if "cheap" in text or "cheep" in text or "chap" in text:
         intent = "cheap"
-    elif "best" in text or "top" in text or "popular" in text:
+    elif "best" in text or "bests" in text or "besst" in text:
         intent = "best"
-    elif "discount" in text:
+    elif "discount" in text or "discont" in text or "dicount" in text:
         intent = "discount"
-    elif "recommend" in text or "show me" in text or "give me" in text:
+    elif "recommend" in text or "recomend" in text or "rekomend" in text or "show me" in text or "give me" in text:
         intent = "recommend"
 
     # -----------------------------
@@ -225,7 +291,7 @@ def get_response(user_input):
     if result.empty:
         return {
             "type": "text",
-            "message": "I couldn't find matching products. Try changing your filters 😊",
+            "message": "I couldn't find matching products. Try changing your filters or check for typos! 😊",
             "data": None
         }
 
