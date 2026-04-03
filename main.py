@@ -9,6 +9,11 @@ from sklearn.linear_model import LogisticRegression
 st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
 st.title("🛍️ ShopAssist AI - Recommendation Chatbot")
 
+# Clear chat button
+if st.button("🗑️ Clear Chat"):
+    st.session_state.messages = []
+    st.rerun()
+
 # -----------------------------
 # LOAD DATASET
 # -----------------------------
@@ -193,8 +198,18 @@ if "messages" not in st.session_state:
 # Display chat history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        if isinstance(msg["content"], str):
-            st.write(msg["content"])
+        content = msg["content"]
+
+if isinstance(content, str):
+    st.write(content)
+
+elif isinstance(content, dict):
+    st.write(content["text"])
+
+    if content["data"] == "SHOW_EXAMPLES":
+        show_examples()
+    else:
+        display_products(content["data"], label="Top Recommendations")
 
 # User input
 user_input = st.chat_input("Ask for recommendations...")
@@ -223,14 +238,20 @@ if user_input:
                 display_products(data, label="Top Recommendations")
 
             st.session_state.messages.append({
-                "role": "assistant",
-                "content": text
-            })
+            "role": "assistant",
+            "content": {
+                "text": text,
+                "data": data
+            }
+        })
 
         else:
             st.write(response)
 
             st.session_state.messages.append({
-                "role": "assistant",
-                "content": response
-            })
+    "role": "assistant",
+    "content": {
+        "text": response,
+        "data": None
+    }
+})
