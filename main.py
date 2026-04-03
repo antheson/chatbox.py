@@ -14,7 +14,25 @@ st.title("🛍️ ShopAssist AI - Recommendation Chatbot")
 if st.button("🗑️ Clear Chat"):
     st.session_state.messages = []
     st.rerun()
-
+    
+# -----------------------------
+# AUTO-SCROLL FUNCTION
+# -----------------------------
+def auto_scroll():
+    """JavaScript to auto-scroll to the bottom of the chat"""
+    st.markdown("""
+        <script>
+        function scrollToBottom() {
+            var chatContainer = document.querySelector('.stChatMessage');
+            if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+        setTimeout(scrollToBottom, 100);
+        </script>
+    """, unsafe_allow_html=True)
+    
 # -----------------------------
 # LOAD DATASET
 # -----------------------------
