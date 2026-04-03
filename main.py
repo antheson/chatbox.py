@@ -217,7 +217,7 @@ if user_input:
 
             st.write(text)
 
-            if data == "SHOW_EXAMPLES":
+            if isinstance(data, str) and data == "SHOW_EXAMPLES":
                 show_examples()
             else:
                 display_products(data, label="Top Recommendations")
