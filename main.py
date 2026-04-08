@@ -61,7 +61,6 @@ def load_data():
     df['product_name'] = df['product_name'].fillna('Unknown Product')
     df['category'] = df['category'].fillna('Uncategorized')
     df['color'] = df['color'].fillna('Multiple Colors')
-    df['availability'] = df['availability'].fillna('Unknown')
     
     return df
 
@@ -175,7 +174,7 @@ def show_examples():
 """)
 
 # -----------------------------
-# DISPLAY PRODUCTS (UI) - ENHANCED VERSION
+# DISPLAY PRODUCTS (UI) - SIMPLIFIED VERSION
 # -----------------------------
 def display_products(df_result, label="Recommended Products"):
     if df_result.empty:
@@ -198,16 +197,14 @@ def display_products(df_result, label="Recommended Products"):
                 <h3 style="margin-top: 0;">#{i} 🛍️ {row.get('product_name', 'Unknown')}</h3>
             """, unsafe_allow_html=True)
             
-            # Create columns for product details
-            col1, col2, col3, col4 = st.columns(4)
+            # Create 5 columns for key information
+            col1, col2, col3, col4, col5 = st.columns(5)
             
             with col1:
                 st.write(f"📂 **Category:** {row.get('category', 'N/A')}")
             
             with col2:
-                if 'color' in row and row['color'] != 'Multiple Colors':
-                    st.write(f"🎨 **Color:** {row.get('color', 'N/A')}")
-                elif 'color' in row:
+                if 'color' in row:
                     st.write(f"🎨 **Color:** {row.get('color', 'N/A')}")
             
             with col3:
@@ -215,41 +212,20 @@ def display_products(df_result, label="Recommended Products"):
                     st.write(f"💰 **Price:** ${row['price']:.2f}")
             
             with col4:
-                if 'availability' in row:
-                    if row['availability'] == 'InStock':
-                        st.write(f"✅ **Status:** In Stock")
-                    else:
-                        st.write(f"📦 **Status:** {row.get('availability', 'N/A')}")
-            
-            # Second row of details
-            col5, col6, col7 = st.columns(3)
-            
-            with col5:
                 if 'popularity_index' in row and row['popularity_index'] > 0:
-                    # Display stars based on rating
                     rating = row['popularity_index']
                     stars = "⭐" * int(round(rating)) + "☆" * (5 - int(round(rating)))
-                    st.write(f"📊 **Rating:** {stars} ({rating}/5)")
+                    st.write(f"⭐ **Rating:** {stars} ({rating}/5)")
             
-            with col6:
+            with col5:
                 if 'discount' in row and row['discount'] > 0:
                     st.write(f"🔥 **Discount:** {row['discount']}% OFF")
-            
-            with col7:
-                if 'review_count' in row and row['review_count'] > 0:
+                elif 'review_count' in row and row['review_count'] > 0:
                     st.write(f"📝 **Reviews:** {int(row['review_count'])}")
             
             # Show original price if available and different
             if 'original_price' in row and row['original_price'] > row['price']:
-                st.caption(f"~~Original Price: ${row['original_price']:.2f}~~")
-            
-            # Show SKU for identification
-            if 'sku' in row and row['sku']:
-                st.caption(f"🆔 SKU: {row['sku']}")
-            
-            # Show breadcrumbs/path if available
-            if 'breadcrumbs' in row and row['breadcrumbs']:
-                st.caption(f"📍 {row['breadcrumbs']}")
+                st.caption(f"~~Original: ${row['original_price']:.2f}~~")
             
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -390,8 +366,6 @@ def get_response(user_input):
 
     if color:
         result = result[result['color'].str.lower() == color.lower()]
-        if not result.empty:
-            st.session_state.last_color_filter = color
 
     if price_limit:
         result = result[result['price'] <= price_limit]
@@ -404,14 +378,14 @@ def get_response(user_input):
         }
 
     # -----------------------------
-    # RECOMMENDATION LOGIC
+    # RECOMMENDATION LOGIC - SIMPLIFIED COLUMNS
     # -----------------------------
     if intent == "cheap":
         result = result[result['price'] > 0].sort_values(by='price').head(limit)
         return {
             "type": "dataframe",
             "message": f"Here are {limit} budget-friendly products{f' in {color}' if color else ''} 💰",
-            "data": result[['product_name','category','price','color','availability','popularity_index','discount','sku','review_count','original_price']]
+            "data": result[['product_name','category','price','color','popularity_index']]
         }
 
     elif intent == "best":
@@ -419,7 +393,7 @@ def get_response(user_input):
         return {
             "type": "dataframe",
             "message": f"Here are the top {limit} highest-rated products{f' in {color}' if color else ''} ⭐",
-            "data": result[['product_name','category','popularity_index','price','color','availability','review_count','sku']]
+            "data": result[['product_name','category','popularity_index','price','color']]
         }
 
     elif intent == "discount":
@@ -427,7 +401,7 @@ def get_response(user_input):
         return {
             "type": "dataframe",
             "message": f"Here are the top {limit} discounted products{f' in {color}' if color else ''} 🔥",
-            "data": result[['product_name','category','discount','price','original_price','color','availability','sku']]
+            "data": result[['product_name','category','discount','price','color']]
         }
 
     else:
@@ -435,7 +409,7 @@ def get_response(user_input):
         return {
             "type": "dataframe",
             "message": f"Here are {limit} recommended products{f' in {color}' if color else ''} 👍",
-            "data": result[['product_name','category','price','popularity_index','color','availability','review_count','sku']]
+            "data": result[['product_name','category','price','popularity_index','color']]
         }
 
 # -----------------------------
@@ -509,3 +483,4 @@ if user_input:
             })
     
     st.rerun()
+    
