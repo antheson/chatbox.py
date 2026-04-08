@@ -3,6 +3,7 @@ import streamlit as st
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
 from difflib import get_close_matches
+import re
 
 # -----------------------------
 # PAGE SETUP
@@ -198,10 +199,11 @@ def show_examples():
 ### 💡 You can try asking:
 - cheap shoes under 100  
 - best products  
-- shoes between 50 and 150  
-- products above 100  
-- most expensive shoes  
+- shoes above 100  
 - clothing under 50  
+- 50-150 shoes  
+- products between 50 and 150  
+- most expensive shoes  
 - show me black shoes  
 - recommend something  
 - show all categories
@@ -313,55 +315,62 @@ def is_valid_query(user_input):
     return any(keyword in text for keyword in valid_keywords)
 
 # -----------------------------
-# EXTRACT PRICE RANGE FROM QUERY
+# EXTRACT PRICE RANGE FROM QUERY - FIXED VERSION
 # -----------------------------
 def extract_price_range(text):
     """Extract min and max price from user query"""
-    words = text.lower().split()
+    text = text.lower()
     min_price = None
     max_price = None
     
-    # Look for "between X and Y" pattern
-    for i, w in enumerate(words):
-        if w == "between" and i + 3 < len(words):
-            if words[i+1].isdigit() and words[i+2] == "and" and words[i+3].isdigit():
-                min_price = float(words[i+1])
-                max_price = float(words[i+3])
-                return min_price, max_price
+    # Pattern 1: "between X and Y"
+    match = re.search(r'between\s+(\d+)\s+and\s+(\d+)', text)
+    if match:
+        min_price = float(match.group(1))
+        max_price = float(match.group(2))
+        return min_price, max_price
     
-    # Look for "above X" or "over X" or "more than X"
-    for i, w in enumerate(words):
-        if w in ["above", "over", "more"] and i + 1 < len(words):
-            if words[i+1].isdigit():
-                min_price = float(words[i+1])
-                return min_price, max_price
-            elif i + 2 < len(words) and words[i+1] == "than" and words[i+2].isdigit():
-                min_price = float(words[i+2])
-                return min_price, max_price
+    # Pattern 2: "X-Y" or "X - Y" or "X to Y"
+    match = re.search(r'(\d+)\s*[-–—to]\s*(\d+)', text)
+    if match:
+        min_price = float(match.group(1))
+        max_price = float(match.group(2))
+        return min_price, max_price
     
-    # Look for "under X", "below X", "less than X"
-    for i, w in enumerate(words):
-        if w in ["under", "below", "less"] and i + 1 < len(words):
-            if words[i+1].isdigit():
-                max_price = float(words[i+1])
-                return min_price, max_price
-            elif i + 2 < len(words) and words[i+1] == "than" and words[i+2].isdigit():
-                max_price = float(words[i+2])
-                return min_price, max_price
+    # Pattern 3: "X and Y"
+    match = re.search(r'(\d+)\s+and\s+(\d+)', text)
+    if match:
+        min_price = float(match.group(1))
+        max_price = float(match.group(2))
+        return min_price, max_price
     
-    # Look for standalone price with "and" or "-" (e.g., "50-150", "50 and 150")
-    for i, w in enumerate(words):
-        if "-" in w and w.replace("-", "").isdigit():
-            parts = w.split("-")
-            if len(parts) == 2:
-                min_price = float(parts[0])
-                max_price = float(parts[1])
-                return min_price, max_price
-        if w == "and" and i > 0 and i + 1 < len(words):
-            if words[i-1].isdigit() and words[i+1].isdigit():
-                min_price = float(words[i-1])
-                max_price = float(words[i+1])
-                return min_price, max_price
+    # Pattern 4: "above X", "over X", "more than X", "greater than X"
+    match = re.search(r'(?:above|over|more\s+than|greater\s+than)\s+(\d+)', text)
+    if match:
+        min_price = float(match.group(1))
+        return min_price, max_price
+    
+    # Pattern 5: "under X", "below X", "less than X", "cheaper than X", "lower than X"
+    match = re.search(r'(?:under|below|less\s+than|cheaper\s+than|lower\s+than)\s+(\d+)', text)
+    if match:
+        max_price = float(match.group(1))
+        return min_price, max_price
+    
+    # Pattern 6: "$X" at the end or beginning (like "shoes 100" or "100 shoes")
+    # Look for any number that might be a price
+    numbers = re.findall(r'\b(\d+)\b', text)
+    if numbers:
+        # Check if the query is simple like "shoes 100" meaning under 100
+        # Or "100 shoes" meaning under 100
+        # Or if there's no other price indicator
+        if len(numbers) == 1:
+            # Single number - assume it's a max price (under)
+            # But check if there's "above" or "over" in the text
+            if 'above' in text or 'over' in text or 'more' in text:
+                min_price = float(numbers[0])
+            else:
+                # Default to under (max price)
+                max_price = float(numbers[0])
     
     return min_price, max_price
 
@@ -389,7 +398,7 @@ def get_response(user_input):
     if intent == "greeting":
         return {
             "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!\n\nTry:\n- cheap shoes under 100\n- products between 50 and 150\n- most expensive shoes\n- best clothing",
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!\n\nTry:\n- cheap shoes under 100\n- shoes above 100\n- clothing under 50\n- 50-150 shoes\n- most expensive shoes\n- best clothing",
             "data": "SHOW_EXAMPLES"
         }
 
@@ -429,7 +438,7 @@ def get_response(user_input):
     if not is_valid_query(user_input):
         return {
             "type": "text",
-            "message": "I'm sorry, I don't understand what you're looking for. 😕\n\nPlease try asking something like:\n- cheap shoes under 100\n- best clothing\n- shoes between 50 and 150\n- most expensive shoes\n\nOr type 'help' to see more examples!",
+            "message": "I'm sorry, I don't understand what you're looking for. 😕\n\nPlease try asking something like:\n- cheap shoes under 100\n- best clothing\n- shoes above 100\n- clothing under 50\n- 50-150 shoes\n\nOr type 'help' to see more examples!",
             "data": None
         }
 
@@ -465,6 +474,9 @@ def get_response(user_input):
     # Extract price range (min and max)
     min_price, max_price = extract_price_range(text)
 
+    # Debug print (optional - remove in production)
+    # st.write(f"Debug: min={min_price}, max={max_price}")  # Uncomment for debugging
+
     # -----------------------------
     # INTENT DETECTION
     # -----------------------------
@@ -499,9 +511,19 @@ def get_response(user_input):
         result = result[result['price'] <= max_price]
 
     if result.empty:
+        # Build helpful message
+        if min_price and max_price:
+            price_msg = f"between ${min_price} and ${max_price}"
+        elif min_price:
+            price_msg = f"above ${min_price}"
+        elif max_price:
+            price_msg = f"under ${max_price}"
+        else:
+            price_msg = ""
+        
         return {
             "type": "text",
-            "message": f"I couldn't find matching products{f' in {color}' if color else ''}{f' between ${min_price} and ${max_price}' if min_price and max_price else f' above ${min_price}' if min_price else f' under ${max_price}' if max_price else ''}{f' in {category}' if category else ''}. Try changing your filters! 😊",
+            "message": f"I couldn't find matching products{f' in {color}' if color else ''} {price_msg}{f' in {category}' if category else ''}. Try changing your filters! 😊",
             "data": None
         }
 
@@ -510,17 +532,19 @@ def get_response(user_input):
     # -----------------------------
     if intent == "expensive":
         result = result[result['price'] > 0].sort_values(by='price', ascending=False).head(limit)
+        price_msg = f"above ${min_price}" if min_price else ""
         return {
             "type": "dataframe",
-            "message": f"Here are the {len(result)} most expensive products{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💎",
+            "message": f"Here are the {len(result)} most expensive products{f' in {color}' if color else ''} {price_msg}{f' in {category}' if category else ''} 💎",
             "data": result[['product_name','category','price','color','popularity_index']]
         }
     
     elif intent == "cheap":
         result = result[result['price'] > 0].sort_values(by='price').head(limit)
+        price_msg = f"under ${max_price}" if max_price else ""
         return {
             "type": "dataframe",
-            "message": f"Here are {len(result)} budget-friendly products{f' in {color}' if color else ''} 💰",
+            "message": f"Here are {len(result)} budget-friendly products{f' in {color}' if color else ''} {price_msg} 💰",
             "data": result[['product_name','category','price','color','popularity_index']]
         }
 
