@@ -10,10 +10,14 @@ from difflib import get_close_matches
 st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
 st.title("🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
 
-# Clear chat button
-if st.button("🗑️ Clear Chat"):
-    st.session_state.messages = []
-    st.rerun()
+# Create header with title and clear button side by side
+col1, col2 = st.columns([6, 1])
+with col1:
+    st.markdown("## 🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
+with col2:
+    if st.button("🗑️ Clear Chat", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
 
 # -----------------------------
 # LOAD DATASET
@@ -102,7 +106,8 @@ def correct_intent_typo(user_input):
         'best': ['best', 'bests', 'besst', 'bist', 'bested'],
         'discount': ['discount', 'discont', 'dicount', 'discout', 'diskaunt'],
         'categories': ['categories', 'catagories', 'categries', 'catgories', 'categorys'],
-        'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded']
+        'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded'],
+        'thank': ['thank', 'thanks', 'thx', 'thankyou', 'thank u', 'tq', 'ty']
     }
     
     words = user_input.lower().split()
@@ -139,7 +144,10 @@ training_data = [
     ("discount items", "discount"),
     ("show categories", "categories"),
     ("what categories", "categories"),
-    ("list categories", "categories")
+    ("list categories", "categories"),
+    ("thank", "thanks"),
+    ("thanks", "thanks"),
+    ("thank you", "thanks")
 ]
 
 X = [x[0] for x in training_data]
@@ -276,7 +284,10 @@ def get_response(user_input):
     text = corrected_input.lower()
 
     # Predict intent
-    intent = predict_intent(corrected_input)
+    try:
+        intent = predict_intent(corrected_input)
+    except:
+        intent = "unknown"
     
     # Check for category intent first
     if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories", "catagories"]):
@@ -288,6 +299,22 @@ def get_response(user_input):
             "type": "text",
             "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
             "data": "SHOW_EXAMPLES"
+        }
+
+    # Thank you responses - different variations
+    if intent == "thanks":
+        thank_messages = [
+            "You're very welcome! 😊 Happy shopping! Is there anything else I can help you with?",
+            "My pleasure! 🛍️ Let me know if you need more recommendations!",
+            "Anytime! 🙌 Feel free to ask if you want to explore more products!",
+            "Glad I could help! 🎯 What would you like to look for next?",
+            "You got it! 👍 Ready to find your next favorite Adidas item?"
+        ]
+        import random
+        return {
+            "type": "text",
+            "message": random.choice(thank_messages),
+            "data": None
         }
 
     # Help
@@ -354,6 +381,17 @@ def get_response(user_input):
             "type": "text",
             "message": "Sure! 😊 What type of products are you looking for?\n\nYou can say:\n- cheap shoes\n- best clothing\n- products under 100",
             "data": "SHOW_EXAMPLES"
+        }
+
+    # -----------------------------
+    # CHECK IF UNDERSTANDABLE
+    # -----------------------------
+    # If no clear intent and no filters, return "don't understand" message
+    if intent not in ["cheap", "best", "discount", "recommend"] and not category and not color and not price_limit:
+        return {
+            "type": "text",
+            "message": "I'm sorry, I don't understand what you're looking for. 😕\n\nPlease try asking something like:\n- cheap shoes under 100\n- best clothing\n- discount items\n- show me black shoes\n\nOr type 'help' to see more examples!",
+            "data": None
         }
 
     # -----------------------------
@@ -483,4 +521,3 @@ if user_input:
             })
     
     st.rerun()
-    
