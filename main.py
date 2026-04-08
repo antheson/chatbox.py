@@ -10,15 +10,6 @@ from difflib import get_close_matches
 st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
 st.title("🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
 
-# Create header with title and clear button side by side
-col1, col2 = st.columns([6, 1])
-with col1:
-    st.markdown("## 🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
-with col2:
-    if st.button("🗑️ Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
 # -----------------------------
 # LOAD DATASET
 # -----------------------------
