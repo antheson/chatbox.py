@@ -2,118 +2,47 @@ import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
-from difflib import get_close_matches
 
 # -----------------------------
 # PAGE SETUP
 # -----------------------------
 st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
-st.title("🛍️ ShopAssist AI - Recommendation Chatbot")
+st.title("🛍️ ShopAssist AI - Adidas Recommendation Bot")
 
-# Clear chat button
+# Clear chat
 if st.button("🗑️ Clear Chat"):
     st.session_state.messages = []
     st.rerun()
 
 # -----------------------------
-# AUTO-SCROLL FUNCTION
-# -----------------------------
-def auto_scroll():
-    """JavaScript to auto-scroll to the bottom of the chat"""
-    st.markdown("""
-        <script>
-        function scrollToBottom() {
-            var chatContainer = document.querySelector('.stChatMessage');
-            if (chatContainer) {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
-            window.scrollTo(0, document.body.scrollHeight);
-        }
-        setTimeout(scrollToBottom, 100);
-        </script>
-    """, unsafe_allow_html=True)
-
-# -----------------------------
 # LOAD DATASET
 # -----------------------------
-df = pd.read_csv("diversified_ecommerce_dataset.csv")
+df = pd.read_csv("adidas_usa.csv")
+
+# Clean + rename columns
 df.columns = df.columns.str.lower().str.replace(" ", "_")
 
-# -----------------------------
-# TYPO CORRECTION FUNCTION
-# -----------------------------
-def correct_typo(word, word_list, cutoff=0.8):
-    """Correct typo in a word using difflib"""
-    if word in word_list:
-        return word
-    
-    matches = get_close_matches(word, word_list, n=1, cutoff=cutoff)
-    if matches:
-        return matches[0]
-    return word
+df = df.rename(columns={
+    "name": "product_name",
+    "selling_price": "price",
+    "average_rating": "rating"
+})
 
-def correct_category_typo(user_input, categories):
-    """Check and correct category typos in user input"""
-    words = user_input.lower().split()
-    corrected_words = []
-    
-    for word in words:
-        # Check if this word might be a category (length > 3 to avoid correcting small words)
-        if len(word) > 3:
-            corrected = correct_typo(word, categories, cutoff=0.7)
-            corrected_words.append(corrected)
-        else:
-            corrected_words.append(word)
-    
-    return ' '.join(corrected_words)
-
-def correct_intent_typo(user_input):
-    """Correct typos in intent-related keywords"""
-    intent_keywords = {
-        'hello': ['hello', 'hllo', 'helo', 'hellp', 'hallow', 'halo'],
-        'help': ['help', 'halp', 'hlp', 'hepl', 'helpp'],
-        'cheap': ['cheap', 'cheep', 'chap', 'chep', 'cheapp'],
-        'best': ['best', 'bests', 'besst', 'bist', 'bested'],
-        'discount': ['discount', 'discont', 'dicount', 'discout', 'diskaunt'],
-        'categories': ['categories', 'catagories', 'categries', 'catgories', 'categorys'],
-        'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded']
-    }
-    
-    words = user_input.lower().split()
-    corrected_words = []
-    
-    for word in words:
-        corrected = word
-        for keyword, variations in intent_keywords.items():
-            if word in variations:
-                corrected = keyword
-                break
-        corrected_words.append(corrected)
-    
-    return ' '.join(corrected_words)
+# Create discount column
+df["discount"] = ((df["original_price"] - df["price"]) / df["original_price"]) * 100
 
 # -----------------------------
-# TRAINING DATA (INTENTS)
+# TRAIN INTENT MODEL
 # -----------------------------
 training_data = [
     ("hello", "greeting"),
     ("hi", "greeting"),
-    ("hey", "greeting"),
-    ("what can you do", "help"),
-    ("help me", "help"),
-    ("how to use", "help"),
-    ("what can i ask", "help"),
-    ("recommend product", "recommend"),
-    ("suggest something", "recommend"),
+    ("help", "help"),
     ("cheap products", "cheap"),
-    ("low price items", "cheap"),
     ("best products", "best"),
     ("top products", "best"),
-    ("most popular", "best"),
     ("discount items", "discount"),
-    ("show categories", "categories"),
-    ("what categories", "categories"),
-    ("list categories", "categories")
+    ("recommend something", "recommend")
 ]
 
 X = [x[0] for x in training_data]
@@ -125,175 +54,87 @@ X_vector = vectorizer.fit_transform(X)
 model = LogisticRegression()
 model.fit(X_vector, y)
 
-# -----------------------------
-# INTENT PREDICTION WITH TYPO HANDLING
-# -----------------------------
 def predict_intent(text):
-    # First correct common typos in the input
-    corrected_text = correct_intent_typo(text)
-    return model.predict(vectorizer.transform([corrected_text.lower()]))[0]
+    return model.predict(vectorizer.transform([text.lower()]))[0]
 
 # -----------------------------
-# SHOW EXAMPLE QUESTIONS
+# DISPLAY PRODUCTS UI
 # -----------------------------
-def show_examples():
-    st.markdown("""
-### 💡 You can try asking:
-- cheap electronics under 100  
-- best products  
-- discount items  
-- show me 5 cheap clothing  
-- recommend something  
-- show all categories  
-- what categories do you have?
-""")
-
-# -----------------------------
-# DISPLAY PRODUCTS (UI)
-# -----------------------------
-def display_products(df_result, label="Recommended Products"):
+def display_products(df_result):
     if df_result.empty:
         st.warning("No products found.")
         return
 
-    st.subheader(f"🏆 {label}")
+    st.subheader("🏆 Top Recommendations")
 
     for i, (_, row) in enumerate(df_result.iterrows(), start=1):
         with st.container():
-            st.markdown(f"### #{i} 🛍️ {row.get('product_name', 'Unknown')}")
+            st.markdown(f"### #{i} 🛍️ {row['product_name']}")
 
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                st.write(f"📂 Category: {row.get('category', 'N/A')}")
+                st.write(f"📂 Category: {row['category']}")
 
             with col2:
-                if 'price' in row:
-                    st.write(f"💰 Price: ${row.get('price', 'N/A')}")
+                st.write(f"💰 Price: ${row['price']}")
 
             with col3:
-                if 'popularity_index' in row:
-                    st.write(f"⭐ Popularity: {row.get('popularity_index', 'N/A')}")
-                elif 'discount' in row:
-                    st.write(f"🔥 Discount: {row.get('discount', 'N/A')}%")
+                st.write(f"⭐ Rating: {row.get('rating', 'N/A')}")
 
+            st.write(f"🔥 Discount: {round(row['discount'],1)}%")
             st.divider()
 
 # -----------------------------
-# DISPLAY CATEGORIES (UI)
-# -----------------------------
-def display_categories():
-    """Display all available product categories"""
-    categories = df['category'].dropna().unique()
-    categories = sorted(categories)
-    
-    st.subheader("📚 Available Product Categories")
-    
-    # Create columns for better display
-    cols = st.columns(3)
-    for idx, category in enumerate(categories):
-        with cols[idx % 3]:
-            # Count products in each category
-            product_count = len(df[df['category'] == category])
-            st.write(f"• **{category}** ({product_count} products)")
-    
-    st.info(f"💡 Total: {len(categories)} categories available")
-    
-    # Optional: Show sample products from random category
-    with st.expander("🔍 Want to see sample products from a category?"):
-        selected_category = st.selectbox("Choose a category:", categories)
-        if selected_category:
-            sample_products = df[df['category'] == selected_category].head(3)
-            st.write(f"**Sample products in {selected_category}:**")
-            for _, product in sample_products.iterrows():
-                st.write(f"• {product['product_name']} - ${product.get('price', 'N/A')}")
-
-# -----------------------------
-# RESPONSE GENERATION WITH TYPO HANDLING
+# RESPONSE LOGIC
 # -----------------------------
 def get_response(user_input):
-    # Apply typo correction to the entire input
-    categories_list = [cat.lower() for cat in df['category'].dropna().unique()]
-    
-    # Correct category typos first
-    corrected_input = correct_category_typo(user_input, categories_list)
-    
-    # Also correct intent typos
-    corrected_input = correct_intent_typo(corrected_input)
-    
-    text = corrected_input.lower()
-
-    # Predict intent
-    intent = predict_intent(corrected_input)
-    
-    # Check for category intent first
-    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories", "catagories"]):
-        intent = "categories"
+    text = user_input.lower()
+    intent = predict_intent(text)
 
     # Greeting
     if intent == "greeting":
         return {
-            "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or popularity!",
-            "data": "SHOW_EXAMPLES"
+            "msg": "Hi 👋 I can recommend Adidas products!\n\nTry:\n- cheap shoes under 100\n- best products\n- discount items",
+            "data": None
         }
 
     # Help
     if intent == "help":
         return {
-            "type": "text",
-            "message": "Here are some things you can ask me 😊",
-            "data": "SHOW_EXAMPLES"
-        }
-    
-    # Show categories
-    if intent == "categories":
-        return {
-            "type": "categories",
-            "message": "Here are all the product categories available in our store! 🛍️",
+            "msg": "You can ask:\n- cheap products\n- best products\n- discount items\n- shoes under 100",
             "data": None
         }
 
     # -----------------------------
-    # DEFAULT SETTINGS
+    # EXTRACT CONDITIONS
     # -----------------------------
     limit = 5
+    price_limit = None
+    category = None
 
+    # Extract number
     for word in text.split():
         if word.isdigit():
             limit = min(int(word), 10)
 
-    # Extract category (with typo handling)
-    category = None
+    # Extract price
+    words = text.split()
+    for i, w in enumerate(words):
+        if w.isdigit() and i > 0 and words[i-1] in ["under", "below"]:
+            price_limit = float(w)
+
+    # Extract category
     for cat in df['category'].dropna().unique():
-        if cat.lower() in text or correct_typo(cat.lower(), text.split(), cutoff=0.7) in text:
+        if cat.lower() in text:
             category = cat
             break
 
-    # Extract price
-    price_limit = None
-    words = text.split()
-    for i, w in enumerate(words):
-        if w.isdigit():
-            if i > 0 and words[i-1] in ["under", "below", "less", "than"]:
-                price_limit = float(w)
-
-    # -----------------------------
-    # INTENT (HYBRID FIX WITH TYPO SUPPORT)
-    # -----------------------------
-    if "cheap" in text or "cheep" in text or "chap" in text:
-        intent = "cheap"
-    elif "best" in text or "bests" in text or "besst" in text:
-        intent = "best"
-    elif "discount" in text or "discont" in text or "dicount" in text:
-        intent = "discount"
-    elif "recommend" in text or "recomend" in text or "rekomend" in text or "show me" in text or "give me" in text:
-        intent = "recommend"
-    elif "products" in text and not category:
+    # Handle unclear request
+    if "products" in text and not category:
         return {
-            "type": "text",
-            "message": "Sure! 😊 What type of products are you looking for?\n\nYou can say:\n- cheap electronics\n- best clothing\n- products under 100",
-            "data": "SHOW_EXAMPLES"
+            "msg": "What type of products are you looking for? 😊\n\nExample:\n- shoes under 100\n- cheap clothing",
+            "data": None
         }
 
     # -----------------------------
@@ -309,45 +150,29 @@ def get_response(user_input):
 
     if result.empty:
         return {
-            "type": "text",
-            "message": "I couldn't find matching products. Try changing your filters or check for typos! 😊",
+            "msg": "No matching products found. Try different filters 😊",
             "data": None
         }
 
     # -----------------------------
-    # RECOMMENDATION LOGIC
+    # RECOMMENDATION TYPES
     # -----------------------------
-    if intent == "cheap":
+    if "cheap" in text or intent == "cheap":
         result = result.sort_values(by='price').head(limit)
-        return {
-            "type": "dataframe",
-            "message": f"Here are {limit} budget-friendly products 💰",
-            "data": result[['product_name','category','price']]
-        }
 
-    elif intent == "best":
-        result = result.sort_values(by='popularity_index', ascending=False).head(limit)
-        return {
-            "type": "dataframe",
-            "message": f"Here are the top {limit} most popular products ⭐",
-            "data": result[['product_name','category','popularity_index']]
-        }
+    elif "best" in text or "top" in text or intent == "best":
+        result = result.sort_values(by=['rating','reviews_count'], ascending=False).head(limit)
 
-    elif intent == "discount":
+    elif "discount" in text or intent == "discount":
         result = result.sort_values(by='discount', ascending=False).head(limit)
-        return {
-            "type": "dataframe",
-            "message": f"Here are the top {limit} discounted products 🔥",
-            "data": result[['product_name','category','discount']]
-        }
 
     else:
-        result = result.sort_values(by='popularity_index', ascending=False).head(limit)
-        return {
-            "type": "dataframe",
-            "message": f"Here are {limit} recommended products 👍",
-            "data": result[['product_name','category','price']]
-        }
+        result = result.sort_values(by=['rating','reviews_count'], ascending=False).head(limit)
+
+    return {
+        "msg": f"Here are top {limit} products 👍",
+        "data": result
+    }
 
 # -----------------------------
 # CHAT UI
@@ -355,46 +180,20 @@ def get_response(user_input):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history
-chat_container = st.container()
+# Display history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.write(msg["content"]["msg"])
+        if msg["content"]["data"] is not None:
+            display_products(msg["content"]["data"])
 
-with chat_container:
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            content = msg["content"]
-            
-            # Check if content is a dictionary (our new format)
-            if isinstance(content, dict):
-                # Display the message
-                st.write(content["message"])
-                
-                # Handle the data based on its type
-                data_value = content["data"]
-                response_type = content.get("type", "")
-                
-                # IMPORTANT: Check type BEFORE comparing
-                if response_type == "categories":
-                    display_categories()
-                elif data_value is not None:
-                    if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
-                        show_examples()
-                    elif isinstance(data_value, pd.DataFrame):
-                        display_products(data_value, label="Top Recommendations")
-            else:
-                # Handle old string format
-                st.write(content)
-
-# Auto-scroll trigger - will run after each new message
-if st.session_state.messages:
-    auto_scroll()
-
-# User input
-user_input = st.chat_input("Ask for recommendations...")
+# Input
+user_input = st.chat_input("Ask me about Adidas products...")
 
 if user_input:
     st.session_state.messages.append({
         "role": "user",
-        "content": user_input
+        "content": {"msg": user_input, "data": None}
     })
 
     with st.chat_message("user"):
@@ -403,35 +202,13 @@ if user_input:
     response = get_response(user_input)
 
     with st.chat_message("assistant"):
-        if isinstance(response, dict):
-            # Display the message
-            st.write(response["message"])
-            
-            # Handle the data based on its type
-            data_value = response["data"]
-            response_type = response.get("type", "")
-            
-            # IMPORTANT: Check type BEFORE comparing
-            if response_type == "categories":
-                display_categories()
-            elif data_value is not None:
-                if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
-                    show_examples()
-                elif isinstance(data_value, pd.DataFrame):
-                    display_products(data_value, label="Top Recommendations")
-            
-            # Store the response
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response
-            })
-        else:
-            # Fallback for any other response format
-            st.write(str(response))
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": str(response)
-            })
-    
-    # Force rerun to trigger auto-scroll
+        st.write(response["msg"])
+        if response["data"] is not None:
+            display_products(response["data"])
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": response
+    })
+
     st.rerun()
