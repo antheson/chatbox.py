@@ -30,7 +30,10 @@ def load_data():
         'selling_price': 'price',
         'original_price': 'original_price',
         'average_rating': 'popularity_index',
-        'reviews_count': 'review_count'
+        'reviews_count': 'review_count',
+        'color': 'color',
+        'sku': 'sku',
+        'availability': 'availability'
     }
     df = df.rename(columns={k: v for k, v in column_mapping.items() if k in df.columns})
     
@@ -57,6 +60,8 @@ def load_data():
     # Fill NaN values
     df['product_name'] = df['product_name'].fillna('Unknown Product')
     df['category'] = df['category'].fillna('Uncategorized')
+    df['color'] = df['color'].fillna('Multiple Colors')
+    df['availability'] = df['availability'].fillna('Unknown')
     
     return df
 
@@ -170,7 +175,7 @@ def show_examples():
 """)
 
 # -----------------------------
-# DISPLAY PRODUCTS (UI)
+# DISPLAY PRODUCTS (UI) - ENHANCED VERSION
 # -----------------------------
 def display_products(df_result, label="Recommended Products"):
     if df_result.empty:
@@ -181,32 +186,72 @@ def display_products(df_result, label="Recommended Products"):
 
     for i, (_, row) in enumerate(df_result.iterrows(), start=1):
         with st.container():
-            st.markdown(f"### #{i} 🛍️ {row.get('product_name', 'Unknown')}")
-
-            col1, col2, col3 = st.columns(3)
-
+            # Create a card-like appearance
+            st.markdown(f"""
+            <div style="
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
+                padding: 15px;
+                margin-bottom: 15px;
+                background-color: #fafafa;
+            ">
+                <h3 style="margin-top: 0;">#{i} 🛍️ {row.get('product_name', 'Unknown')}</h3>
+            """, unsafe_allow_html=True)
+            
+            # Create columns for product details
+            col1, col2, col3, col4 = st.columns(4)
+            
             with col1:
-                st.write(f"📂 Category: {row.get('category', 'N/A')}")
-
+                st.write(f"📂 **Category:** {row.get('category', 'N/A')}")
+            
             with col2:
-                if 'price' in row and row['price'] > 0:
-                    st.write(f"💰 Price: ${row['price']:.2f}")
-
+                if 'color' in row and row['color'] != 'Multiple Colors':
+                    st.write(f"🎨 **Color:** {row.get('color', 'N/A')}")
+                elif 'color' in row:
+                    st.write(f"🎨 **Color:** {row.get('color', 'N/A')}")
+            
             with col3:
+                if 'price' in row and row['price'] > 0:
+                    st.write(f"💰 **Price:** ${row['price']:.2f}")
+            
+            with col4:
+                if 'availability' in row:
+                    if row['availability'] == 'InStock':
+                        st.write(f"✅ **Status:** In Stock")
+                    else:
+                        st.write(f"📦 **Status:** {row.get('availability', 'N/A')}")
+            
+            # Second row of details
+            col5, col6, col7 = st.columns(3)
+            
+            with col5:
                 if 'popularity_index' in row and row['popularity_index'] > 0:
-                    st.write(f"⭐ Rating: {row['popularity_index']}/5")
-                elif 'discount' in row and row['discount'] > 0:
-                    st.write(f"🔥 Discount: {row['discount']}%")
-
+                    # Display stars based on rating
+                    rating = row['popularity_index']
+                    stars = "⭐" * int(round(rating)) + "☆" * (5 - int(round(rating)))
+                    st.write(f"📊 **Rating:** {stars} ({rating}/5)")
+            
+            with col6:
+                if 'discount' in row and row['discount'] > 0:
+                    st.write(f"🔥 **Discount:** {row['discount']}% OFF")
+            
+            with col7:
+                if 'review_count' in row and row['review_count'] > 0:
+                    st.write(f"📝 **Reviews:** {int(row['review_count'])}")
+            
             # Show original price if available and different
             if 'original_price' in row and row['original_price'] > row['price']:
-                st.caption(f"~~Original: ${row['original_price']:.2f}~~")
+                st.caption(f"~~Original Price: ${row['original_price']:.2f}~~")
             
-            # Show review count if available
-            if 'review_count' in row and row['review_count'] > 0:
-                st.caption(f"📝 {int(row['review_count'])} reviews")
-
-            st.divider()
+            # Show SKU for identification
+            if 'sku' in row and row['sku']:
+                st.caption(f"🆔 SKU: {row['sku']}")
+            
+            # Show breadcrumbs/path if available
+            if 'breadcrumbs' in row and row['breadcrumbs']:
+                st.caption(f"📍 {row['breadcrumbs']}")
+            
+            st.markdown("</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # DISPLAY CATEGORIES (UI)
@@ -223,7 +268,9 @@ def display_categories():
     for idx, category in enumerate(categories):
         with cols[idx % 3]:
             product_count = len(df[df['category'] == category])
-            st.write(f"• **{category}** ({product_count} products)")
+            # Get unique colors in this category
+            unique_colors = df[df['category'] == category]['color'].nunique()
+            st.write(f"• **{category}** ({product_count} products, {unique_colors} colors)")
     
     st.info(f"💡 Total: {len(categories)} categories available")
     
@@ -231,10 +278,11 @@ def display_categories():
     with st.expander("🔍 Want to see sample products from a category?"):
         selected_category = st.selectbox("Choose a category:", categories)
         if selected_category:
-            sample_products = df[df['category'] == selected_category].head(3)
+            sample_products = df[df['category'] == selected_category].head(5)
             st.write(f"**Sample products in {selected_category}:**")
             for _, product in sample_products.iterrows():
-                st.write(f"• {product['product_name']} - ${product.get('price', 0):.2f}")
+                color_info = f" ({product['color']})" if product['color'] != 'Multiple Colors' else ""
+                st.write(f"• {product['product_name']}{color_info} - ${product.get('price', 0):.2f}")
 
 # -----------------------------
 # RESPONSE GENERATION WITH TYPO HANDLING
@@ -262,7 +310,7 @@ def get_response(user_input):
     if intent == "greeting":
         return {
             "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, or rating!",
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
             "data": "SHOW_EXAMPLES"
         }
 
@@ -296,6 +344,14 @@ def get_response(user_input):
     for cat in df['category'].dropna().unique():
         if cat.lower() in text or correct_typo(cat.lower(), text.split(), cutoff=0.7) in text:
             category = cat
+            break
+
+    # Extract color (if mentioned)
+    color = None
+    colors_list = df['color'].dropna().unique()
+    for col in colors_list:
+        if col.lower() in text:
+            color = col
             break
 
     # Extract price
@@ -332,13 +388,18 @@ def get_response(user_input):
     if category:
         result = result[result['category'].str.lower() == category.lower()]
 
+    if color:
+        result = result[result['color'].str.lower() == color.lower()]
+        if not result.empty:
+            st.session_state.last_color_filter = color
+
     if price_limit:
         result = result[result['price'] <= price_limit]
 
     if result.empty:
         return {
             "type": "text",
-            "message": "I couldn't find matching products. Try changing your filters or check for typos! 😊",
+            "message": f"I couldn't find matching products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''}{f' in {category}' if category else ''}. Try changing your filters or check for typos! 😊",
             "data": None
         }
 
@@ -349,32 +410,32 @@ def get_response(user_input):
         result = result[result['price'] > 0].sort_values(by='price').head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are {limit} budget-friendly products 💰",
-            "data": result[['product_name','category','price']]
+            "message": f"Here are {limit} budget-friendly products{f' in {color}' if color else ''} 💰",
+            "data": result[['product_name','category','price','color','availability','popularity_index','discount','sku','review_count','original_price']]
         }
 
     elif intent == "best":
         result = result[result['popularity_index'] > 0].sort_values(by='popularity_index', ascending=False).head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are the top {limit} highest-rated products ⭐",
-            "data": result[['product_name','category','popularity_index']]
+            "message": f"Here are the top {limit} highest-rated products{f' in {color}' if color else ''} ⭐",
+            "data": result[['product_name','category','popularity_index','price','color','availability','review_count','sku']]
         }
 
     elif intent == "discount":
         result = result[result['discount'] > 0].sort_values(by='discount', ascending=False).head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are the top {limit} discounted products 🔥",
-            "data": result[['product_name','category','discount']]
+            "message": f"Here are the top {limit} discounted products{f' in {color}' if color else ''} 🔥",
+            "data": result[['product_name','category','discount','price','original_price','color','availability','sku']]
         }
 
     else:
         result = result[result['popularity_index'] > 0].sort_values(by='popularity_index', ascending=False).head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are {limit} recommended products 👍",
-            "data": result[['product_name','category','price', 'popularity_index']]
+            "message": f"Here are {limit} recommended products{f' in {color}' if color else ''} 👍",
+            "data": result[['product_name','category','price','popularity_index','color','availability','review_count','sku']]
         }
 
 # -----------------------------
