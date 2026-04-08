@@ -80,13 +80,6 @@ def load_data():
     # Clean price column
     df['price'] = df['price'].fillna(0)
     
-    # Create discount column if not exists (calculate from original_price and selling_price)
-    if 'original_price' in df.columns and 'price' in df.columns:
-        df['discount'] = ((df['original_price'] - df['price']) / df['original_price'] * 100).fillna(0)
-        df['discount'] = df['discount'].round(0).astype(int)
-    else:
-        df['discount'] = 0
-    
     # Fill NaN values
     df['product_name'] = df['product_name'].fillna('Unknown Product')
     df['category'] = df['category'].fillna('Uncategorized')
@@ -133,7 +126,7 @@ def correct_intent_typo(user_input):
         'help': ['help', 'halp', 'hlp', 'hepl', 'helpp'],
         'cheap': ['cheap', 'cheep', 'chap', 'chep', 'cheapp'],
         'best': ['best', 'bests', 'besst', 'bist', 'bested'],
-        'discount': ['discount', 'discont', 'dicount', 'discout', 'diskaunt'],
+        'expensive': ['expensive', 'expensiv', 'expen', 'costly', 'premium', 'luxury'],
         'categories': ['categories', 'catagories', 'categries', 'catgories', 'categorys'],
         'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded'],
         'thank': ['thank', 'thanks', 'thx', 'thankyou', 'thank u', 'tq', 'ty']
@@ -170,7 +163,9 @@ training_data = [
     ("best products", "best"),
     ("top products", "best"),
     ("most popular", "best"),
-    ("discount items", "discount"),
+    ("expensive products", "expensive"),
+    ("most expensive", "expensive"),
+    ("premium products", "expensive"),
     ("show categories", "categories"),
     ("what categories", "categories"),
     ("list categories", "categories"),
@@ -203,8 +198,9 @@ def show_examples():
 ### 💡 You can try asking:
 - cheap shoes under 100  
 - best products  
-- discount items  
-- shoes under 200  
+- shoes between 50 and 150  
+- products above 100  
+- most expensive shoes  
 - clothing under 50  
 - show me black shoes  
 - recommend something  
@@ -212,7 +208,7 @@ def show_examples():
 """)
 
 # -----------------------------
-# DISPLAY PRODUCTS (UI) - SIMPLIFIED VERSION
+# DISPLAY PRODUCTS (UI)
 # -----------------------------
 def display_products(df_result, label="Recommended Products"):
     if df_result.empty:
@@ -256,9 +252,7 @@ def display_products(df_result, label="Recommended Products"):
                     st.write(f"⭐ **Rating:** {stars} ({rating}/5)")
             
             with col5:
-                if 'discount' in row and row['discount'] > 0:
-                    st.write(f"🔥 **Discount:** {row['discount']}% OFF")
-                elif 'review_count' in row and row['review_count'] > 0:
+                if 'review_count' in row and row['review_count'] > 0:
                     st.write(f"📝 **Reviews:** {int(row['review_count'])}")
             
             # Show original price if available and different
@@ -303,36 +297,82 @@ def display_categories():
 # -----------------------------
 def is_valid_query(user_input):
     """Check if the user query is valid for product search"""
-    # List of valid keywords for product search
     valid_keywords = [
-        'cheap', 'best', 'discount', 'recommend', 'show', 'find', 'get', 'give',
+        'cheap', 'best', 'expensive', 'recommend', 'show', 'find', 'get', 'give',
         'shoes', 'clothing', 'accessories', 'originals', 'soccer', 'running',
         'black', 'white', 'blue', 'red', 'pink', 'green', 'purple', 'grey', 'yellow',
-        'under', 'below', 'less', 'than', 'price', 'budget', 'affordable',
-        'top', 'rated', 'popular', 'highest', 'sale', 'clearance'
+        'under', 'below', 'less', 'than', 'above', 'over', 'more', 'between', 'price', 
+        'budget', 'affordable', 'top', 'rated', 'popular', 'highest', 'premium', 'luxury'
     ]
     
     # Also check for category names
     categories = [cat.lower() for cat in df['category'].dropna().unique()]
     valid_keywords.extend(categories)
     
-    # Check if any valid keyword is in the input
     text = user_input.lower()
     return any(keyword in text for keyword in valid_keywords)
 
 # -----------------------------
-# RESPONSE GENERATION WITH TYPO HANDLING
+# EXTRACT PRICE RANGE FROM QUERY
+# -----------------------------
+def extract_price_range(text):
+    """Extract min and max price from user query"""
+    words = text.lower().split()
+    min_price = None
+    max_price = None
+    
+    # Look for "between X and Y" pattern
+    for i, w in enumerate(words):
+        if w == "between" and i + 3 < len(words):
+            if words[i+1].isdigit() and words[i+2] == "and" and words[i+3].isdigit():
+                min_price = float(words[i+1])
+                max_price = float(words[i+3])
+                return min_price, max_price
+    
+    # Look for "above X" or "over X" or "more than X"
+    for i, w in enumerate(words):
+        if w in ["above", "over", "more"] and i + 1 < len(words):
+            if words[i+1].isdigit():
+                min_price = float(words[i+1])
+                return min_price, max_price
+            elif i + 2 < len(words) and words[i+1] == "than" and words[i+2].isdigit():
+                min_price = float(words[i+2])
+                return min_price, max_price
+    
+    # Look for "under X", "below X", "less than X"
+    for i, w in enumerate(words):
+        if w in ["under", "below", "less"] and i + 1 < len(words):
+            if words[i+1].isdigit():
+                max_price = float(words[i+1])
+                return min_price, max_price
+            elif i + 2 < len(words) and words[i+1] == "than" and words[i+2].isdigit():
+                max_price = float(words[i+2])
+                return min_price, max_price
+    
+    # Look for standalone price with "and" or "-" (e.g., "50-150", "50 and 150")
+    for i, w in enumerate(words):
+        if "-" in w and w.replace("-", "").isdigit():
+            parts = w.split("-")
+            if len(parts) == 2:
+                min_price = float(parts[0])
+                max_price = float(parts[1])
+                return min_price, max_price
+        if w == "and" and i > 0 and i + 1 < len(words):
+            if words[i-1].isdigit() and words[i+1].isdigit():
+                min_price = float(words[i-1])
+                max_price = float(words[i+1])
+                return min_price, max_price
+    
+    return min_price, max_price
+
+# -----------------------------
+# RESPONSE GENERATION
 # -----------------------------
 def get_response(user_input):
-    # Apply typo correction to the entire input
+    # Apply typo correction
     categories_list = [cat.lower() for cat in df['category'].dropna().unique()]
-    
-    # Correct category typos first
     corrected_input = correct_category_typo(user_input, categories_list)
-    
-    # Also correct intent typos
     corrected_input = correct_intent_typo(corrected_input)
-    
     text = corrected_input.lower()
 
     # Predict intent
@@ -341,19 +381,19 @@ def get_response(user_input):
     except:
         intent = "unknown"
     
-    # Check for category intent first
-    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories", "catagories"]):
+    # Check for category intent
+    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories"]):
         intent = "categories"
 
     # Greeting
     if intent == "greeting":
         return {
             "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!\n\nTry:\n- cheap shoes under 100\n- products between 50 and 150\n- most expensive shoes\n- best clothing",
             "data": "SHOW_EXAMPLES"
         }
 
-    # Thank you responses - different variations
+    # Thank you responses
     if intent == "thanks":
         thank_messages = [
             "You're very welcome! 😊 Happy shopping! Is there anything else I can help you with?",
@@ -385,38 +425,36 @@ def get_response(user_input):
             "data": None
         }
 
-    # -----------------------------
-    # CHECK IF VALID QUERY FIRST
-    # -----------------------------
+    # Check if valid query
     if not is_valid_query(user_input):
         return {
             "type": "text",
-            "message": "I'm sorry, I don't understand what you're looking for. 😕\n\nPlease try asking something like:\n- cheap shoes under 100\n- best clothing\n- discount items\n- shoes under 200\n- show me black shoes\n\nOr type 'help' to see more examples!",
+            "message": "I'm sorry, I don't understand what you're looking for. 😕\n\nPlease try asking something like:\n- cheap shoes under 100\n- best clothing\n- shoes between 50 and 150\n- most expensive shoes\n\nOr type 'help' to see more examples!",
             "data": None
         }
 
     # -----------------------------
-    # DEFAULT SETTINGS - FIXED TO 5 PRODUCTS MAX
+    # DEFAULT SETTINGS
     # -----------------------------
-    limit = 5  # Always show 5 products max
+    limit = 5
     
-    # Check if user specified a number (but cap at 5)
+    # Check if user specified a number
     for word in text.split():
         if word.isdigit():
             requested = int(word)
             if requested < 5:
                 limit = requested
             else:
-                limit = 5  # Cap at 5
+                limit = 5
 
-    # Extract category (with typo handling)
+    # Extract category
     category = None
     for cat in df['category'].dropna().unique():
         if cat.lower() in text or correct_typo(cat.lower(), text.split(), cutoff=0.7) in text:
             category = cat
             break
 
-    # Extract color (if mentioned)
+    # Extract color
     color = None
     colors_list = df['color'].dropna().unique()
     for col in colors_list:
@@ -424,45 +462,24 @@ def get_response(user_input):
             color = col
             break
 
-    # Extract price limit
-    price_limit = None
-    words = text.split()
-    for i, w in enumerate(words):
-        if w.isdigit():
-            # Check for "under X", "below X", "less than X"
-            if i > 0 and words[i-1] in ["under", "below", "less", "than"]:
-                price_limit = float(w)
-            # Also check for "under$X" or "under $X"
-            elif i > 0 and words[i-1] == "under$":
-                price_limit = float(w)
-            # Check for price at the end like "shoes 200" or "shoes under200"
-            elif i == len(words) - 1 and len(words) > 1:
-                # Check previous word for price indicator
-                if words[i-1] in ["under", "below", "less", "than", "shoes", "clothing", "accessories"]:
-                    price_limit = float(w)
+    # Extract price range (min and max)
+    min_price, max_price = extract_price_range(text)
 
     # -----------------------------
-    # DETERMINE INTENT (PRIORITIZE PRICE QUERIES)
+    # INTENT DETECTION
     # -----------------------------
-    # If user asks for products under a price without specifying cheap/best/discount
-    if price_limit and not any(keyword in text for keyword in ["cheap", "best", "discount", "top", "popular"]):
-        intent = "price_filter"  # New intent for price-only queries
-    
-    # Check for intent keywords
-    if "cheap" in text or "cheep" in text or "chap" in text or "budget" in text or "affordable" in text:
+    if "expensive" in text or "premium" in text or "luxury" in text or "most expensive" in text:
+        intent = "expensive"
+    elif "cheap" in text or "budget" in text or "affordable" in text:
         intent = "cheap"
-    elif "best" in text or "bests" in text or "besst" in text or "top" in text or "popular" in text:
+    elif "best" in text or "top" in text or "popular" in text:
         intent = "best"
-    elif "discount" in text or "discont" in text or "dicount" in text or "sale" in text or "clearance" in text:
-        intent = "discount"
-    elif "recommend" in text or "recomend" in text or "rekomend" in text or "show me" in text or "give me" in text:
+    elif "recommend" in text or "show me" in text or "give me" in text:
         intent = "recommend"
-    elif "products" in text and not category and not price_limit:
-        return {
-            "type": "text",
-            "message": "Sure! 😊 What type of products are you looking for?\n\nYou can say:\n- cheap shoes\n- best clothing\n- shoes under 200\n- products under 100",
-            "data": "SHOW_EXAMPLES"
-        }
+    
+    # If price range exists without specific intent, treat as price filter
+    if (min_price or max_price) and intent not in ["cheap", "expensive"]:
+        intent = "price_range"
 
     # -----------------------------
     # FILTER DATA
@@ -475,33 +492,27 @@ def get_response(user_input):
     if color:
         result = result[result['color'].str.lower() == color.lower()]
 
-    if price_limit:
-        result = result[result['price'] <= price_limit]
+    if min_price:
+        result = result[result['price'] >= min_price]
+    
+    if max_price:
+        result = result[result['price'] <= max_price]
 
     if result.empty:
-        # More helpful message when no products found
-        if intent == "discount":
-            return {
-                "type": "text",
-                "message": f"I couldn't find any discounted products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''}{f' in {category}' if category else ''}. 😕\n\nTry:\n- Removing the 'discount' filter\n- Checking other categories\n- Or ask for products under a higher price!",
-                "data": None
-            }
-        else:
-            return {
-                "type": "text",
-                "message": f"I couldn't find matching products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''}{f' in {category}' if category else ''}. Try changing your filters or check for typos! 😊",
-                "data": None
-            }
+        return {
+            "type": "text",
+            "message": f"I couldn't find matching products{f' in {color}' if color else ''}{f' between ${min_price} and ${max_price}' if min_price and max_price else f' above ${min_price}' if min_price else f' under ${max_price}' if max_price else ''}{f' in {category}' if category else ''}. Try changing your filters! 😊",
+            "data": None
+        }
 
     # -----------------------------
     # RECOMMENDATION LOGIC
     # -----------------------------
-    # Handle price-only queries (like "shoes under 200")
-    if intent == "price_filter":
-        result = result[result['price'] > 0].sort_values(by='price').head(limit)
+    if intent == "expensive":
+        result = result[result['price'] > 0].sort_values(by='price', ascending=False).head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are {len(result)} products under ${price_limit}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
+            "message": f"Here are the {len(result)} most expensive products{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💎",
             "data": result[['product_name','category','price','color','popularity_index']]
         }
     
@@ -509,7 +520,7 @@ def get_response(user_input):
         result = result[result['price'] > 0].sort_values(by='price').head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are {len(result)} budget-friendly products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''} 💰",
+            "message": f"Here are {len(result)} budget-friendly products{f' in {color}' if color else ''} 💰",
             "data": result[['product_name','category','price','color','popularity_index']]
         }
 
@@ -517,29 +528,38 @@ def get_response(user_input):
         result = result[result['popularity_index'] > 0].sort_values(by='popularity_index', ascending=False).head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are the top {len(result)} highest-rated products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''} ⭐",
+            "message": f"Here are the top {len(result)} highest-rated products{f' in {color}' if color else ''} ⭐",
             "data": result[['product_name','category','popularity_index','price','color']]
         }
 
-    elif intent == "discount":
-        result = result[result['discount'] > 0].sort_values(by='discount', ascending=False).head(limit)
-        if result.empty:
+    elif intent == "price_range":
+        if min_price and max_price:
+            result = result[result['price'] > 0].sort_values(by='price').head(limit)
             return {
-                "type": "text",
-                "message": f"I couldn't find any discounted products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''}{f' in {category}' if category else ''}. 😕\n\nTry asking for 'cheap' products or products under a price instead!",
-                "data": None
+                "type": "dataframe",
+                "message": f"Here are {len(result)} products between ${min_price} and ${max_price}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
+                "data": result[['product_name','category','price','color','popularity_index']]
             }
-        return {
-            "type": "dataframe",
-            "message": f"Here are the top {len(result)} discounted products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''} 🔥",
-            "data": result[['product_name','category','discount','price','color']]
-        }
+        elif max_price:
+            result = result[result['price'] > 0].sort_values(by='price').head(limit)
+            return {
+                "type": "dataframe",
+                "message": f"Here are {len(result)} products under ${max_price}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
+                "data": result[['product_name','category','price','color','popularity_index']]
+            }
+        elif min_price:
+            result = result[result['price'] > 0].sort_values(by='price').head(limit)
+            return {
+                "type": "dataframe",
+                "message": f"Here are {len(result)} products above ${min_price}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
+                "data": result[['product_name','category','price','color','popularity_index']]
+            }
 
     else:
         result = result[result['popularity_index'] > 0].sort_values(by='popularity_index', ascending=False).head(limit)
         return {
             "type": "dataframe",
-            "message": f"Here are {len(result)} recommended products{f' in {color}' if color else ''}{f' under ${price_limit}' if price_limit else ''} 👍",
+            "message": f"Here are {len(result)} recommended products{f' in {color}' if color else ''} 👍",
             "data": result[['product_name','category','price','popularity_index','color']]
         }
 
