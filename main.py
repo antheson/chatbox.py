@@ -8,6 +8,41 @@ from difflib import get_close_matches
 # PAGE SETUP
 # -----------------------------
 st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
+
+# Custom CSS to fix button at bottom
+st.markdown("""
+<style>
+    /* Fix clear chat button at bottom */
+    .fixed-bottom {
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        z-index: 999;
+    }
+    
+    /* Adjust main content to not overlap with button */
+    .main > div {
+        padding-bottom: 100px;
+    }
+    
+    /* Style the button */
+    .stButton button {
+        background-color: #ff4b4b;
+        color: white;
+        border-radius: 20px;
+        padding: 8px 20px;
+        font-weight: bold;
+        border: none;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    
+    .stButton button:hover {
+        background-color: #ff0000;
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
 
 # -----------------------------
@@ -470,6 +505,13 @@ with chat_container:
                         display_products(data_value, label="Top Recommendations")
             else:
                 st.write(content)
+
+# Fixed Clear Chat button at bottom
+st.markdown('<div class="fixed-bottom">', unsafe_allow_html=True)
+if st.button("🗑️ Clear Chat", key="clear_chat_bottom"):
+    st.session_state.messages = []
+    st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 # User input
 user_input = st.chat_input("Ask for recommendations...")
