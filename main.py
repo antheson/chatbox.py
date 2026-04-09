@@ -97,12 +97,6 @@ df = load_data()
 ALL_CATEGORIES = df['category'].dropna().unique().tolist()
 ALL_COLORS = df['color'].dropna().unique().tolist()
 
-# Print debug info (will show in terminal when running)
-print("=== AVAILABLE CATEGORIES ===")
-print(ALL_CATEGORIES)
-print("=== AVAILABLE COLORS ===")
-print(ALL_COLORS[:20])  # First 20 colors
-
 # -----------------------------
 # TYPO CORRECTION FUNCTION
 # -----------------------------
@@ -207,14 +201,12 @@ def predict_intent(text):
 def show_examples():
     st.markdown("""
 ### 💡 You can try asking:
-- cheap shoes under 100  
-- best products  
-- shoes above 100  
+- shoes under 100  
 - clothing under 50  
+- show me black shoes  
+- best shoes  
 - shoes between 50 and 150  
 - most expensive shoes  
-- show me black shoes  
-- recommend something  
 - show all categories
 """)
 
@@ -304,123 +296,112 @@ def display_categories():
                 st.write(f"• {product['product_name']}{color_info} - ${product.get('price', 0):.2f}")
 
 # -----------------------------
-# EXTRACT PRICE RANGE FROM QUERY
+# EXTRACT ALL FILTERS FROM QUERY
 # -----------------------------
-def extract_price_range(text):
-    """Extract min and max price from user query"""
-    text = text.lower()
-    min_price = None
-    max_price = None
-    
-    # Look for "under X" or "below X" or "less than X"
-    under_match = re.search(r'(?:under|below|less than|cheaper than)\s+(\d+)', text)
-    if under_match:
-        max_price = float(under_match.group(1))
-    
-    # Look for "above X" or "over X" or "more than X"
-    above_match = re.search(r'(?:above|over|more than|greater than)\s+(\d+)', text)
-    if above_match:
-        min_price = float(above_match.group(1))
-    
-    # Look for "between X and Y"
-    between_match = re.search(r'between\s+(\d+)\s+and\s+(\d+)', text)
-    if between_match:
-        min_price = float(between_match.group(1))
-        max_price = float(between_match.group(2))
-    
-    # Look for "X to Y"
-    to_match = re.search(r'(\d+)\s+to\s+(\d+)', text)
-    if to_match and not between_match:
-        min_price = float(to_match.group(1))
-        max_price = float(to_match.group(2))
-    
-    # Look for number after category like "shoes 100"
-    number_after_category = re.search(r'(?:shoes|clothing|accessories)\s+(\d+)', text)
-    if number_after_category and not max_price:
-        max_price = float(number_after_category.group(1))
-    
-    # Look for single number
-    numbers = re.findall(r'\b(\d+)\b', text)
-    if numbers and not min_price and not max_price:
-        num = float(numbers[0])
-        # If it's a simple query like "shoes 100"
-        if len(numbers) == 1:
-            max_price = num
-    
-    return min_price, max_price
-
-# -----------------------------
-# EXTRACT CATEGORY FROM QUERY - SIMPLE DIRECT MATCH
-# -----------------------------
-def extract_category(text):
-    """Extract category from user query - direct match with dataset categories"""
+def extract_filters(text):
+    """Extract all filters from user query"""
     text_lower = text.lower()
     
-    # Direct matching with categories from dataset
-    for cat in ALL_CATEGORIES:
-        if cat.lower() in text_lower:
-            print(f"DEBUG: Found category '{cat}' in query")
-            return cat
-    
-    # Also check for common words and map to categories
-    if 'shoes' in text_lower or 'shoe' in text_lower or 'sneakers' in text_lower or 'footwear' in text_lower:
-        for cat in ALL_CATEGORIES:
-            if cat.lower() == 'shoes':
-                print(f"DEBUG: Mapped 'shoes' to category '{cat}'")
-                return cat
-    
-    if 'clothing' in text_lower or 'cloth' in text_lower or 'apparel' in text_lower or 'wear' in text_lower:
-        for cat in ALL_CATEGORIES:
-            if cat.lower() == 'clothing':
-                print(f"DEBUG: Mapped 'clothing' to category '{cat}'")
-                return cat
-    
-    if 'accessories' in text_lower or 'accessory' in text_lower or 'bag' in text_lower or 'hat' in text_lower:
-        for cat in ALL_CATEGORIES:
-            if cat.lower() == 'accessories':
-                print(f"DEBUG: Mapped 'accessories' to category '{cat}'")
-                return cat
-    
-    return None
-
-# -----------------------------
-# EXTRACT COLOR FROM QUERY - SIMPLE DIRECT MATCH
-# -----------------------------
-def extract_color(text):
-    """Extract color from user query - direct match with dataset colors"""
-    text_lower = text.lower()
-    
-    # Direct matching with colors from dataset
-    for col in ALL_COLORS:
-        if col.lower() in text_lower:
-            print(f"DEBUG: Found color '{col}' in query")
-            return col
-    
-    # Also check for common color variations
-    color_mapping = {
-        'black': 'Black',
-        'white': 'White',
-        'blue': 'Blue',
-        'red': 'Red',
-        'pink': 'Pink',
-        'green': 'Green',
-        'purple': 'Purple',
-        'grey': 'Grey',
-        'gray': 'Grey',
-        'yellow': 'Yellow',
-        'gold': 'Gold',
-        'beige': 'Beige',
-        'burgundy': 'Burgundy'
+    # Initialize filters
+    filters = {
+        'category': None,
+        'color': None,
+        'min_price': None,
+        'max_price': None,
+        'intent': 'recommend'  # default intent
     }
     
-    for color_word, color_actual in color_mapping.items():
-        if color_word in text_lower:
-            # Verify this color exists in dataset
-            if color_actual in ALL_COLORS:
-                print(f"DEBUG: Mapped '{color_word}' to color '{color_actual}'")
-                return color_actual
+    # 1. Extract category
+    for cat in ALL_CATEGORIES:
+        if cat.lower() in text_lower:
+            filters['category'] = cat
+            break
     
-    return None
+    # If no direct category match, try mapping common words
+    if not filters['category']:
+        if 'shoe' in text_lower or 'sneaker' in text_lower or 'footwear' in text_lower:
+            for cat in ALL_CATEGORIES:
+                if cat.lower() == 'shoes':
+                    filters['category'] = cat
+                    break
+        elif 'cloth' in text_lower or 'apparel' in text_lower or 'wear' in text_lower:
+            for cat in ALL_CATEGORIES:
+                if cat.lower() == 'clothing':
+                    filters['category'] = cat
+                    break
+        elif 'accessorie' in text_lower or 'bag' in text_lower or 'hat' in text_lower:
+            for cat in ALL_CATEGORIES:
+                if cat.lower() == 'accessories':
+                    filters['category'] = cat
+                    break
+    
+    # 2. Extract color
+    for col in ALL_COLORS:
+        if col.lower() in text_lower:
+            filters['color'] = col
+            break
+    
+    # Color mapping for variations
+    if not filters['color']:
+        color_map = {
+            'black': 'Black', 'white': 'White', 'blue': 'Blue', 'red': 'Red',
+            'pink': 'Pink', 'green': 'Green', 'purple': 'Purple', 'grey': 'Grey',
+            'gray': 'Grey', 'yellow': 'Yellow', 'gold': 'Gold', 'beige': 'Beige'
+        }
+        for color_word, color_actual in color_map.items():
+            if color_word in text_lower and color_actual in ALL_COLORS:
+                filters['color'] = color_actual
+                break
+    
+    # 3. Extract price range
+    # Pattern: under X, below X, less than X
+    under_match = re.search(r'(?:under|below|less than)\s+(\d+)', text_lower)
+    if under_match:
+        filters['max_price'] = float(under_match.group(1))
+    
+    # Pattern: above X, over X, more than X
+    above_match = re.search(r'(?:above|over|more than)\s+(\d+)', text_lower)
+    if above_match:
+        filters['min_price'] = float(above_match.group(1))
+    
+    # Pattern: between X and Y
+    between_match = re.search(r'between\s+(\d+)\s+and\s+(\d+)', text_lower)
+    if between_match:
+        filters['min_price'] = float(between_match.group(1))
+        filters['max_price'] = float(between_match.group(2))
+    
+    # Pattern: X to Y
+    to_match = re.search(r'(\d+)\s+to\s+(\d+)', text_lower)
+    if to_match and not between_match:
+        filters['min_price'] = float(to_match.group(1))
+        filters['max_price'] = float(to_match.group(2))
+    
+    # Pattern: number after category like "shoes 100"
+    number_after_category = re.search(r'(?:shoes?|clothing|accessories)\s+(\d+)', text_lower)
+    if number_after_category and not filters['max_price']:
+        filters['max_price'] = float(number_after_category.group(1))
+    
+    # Pattern: single number (treat as max price)
+    numbers = re.findall(r'\b(\d+)\b', text_lower)
+    if numbers and not filters['min_price'] and not filters['max_price']:
+        if len(numbers) == 1:
+            filters['max_price'] = float(numbers[0])
+    
+    # 4. Extract intent based on keywords (but don't override price filters)
+    if 'expensive' in text_lower or 'premium' in text_lower or 'luxury' in text_lower:
+        filters['intent'] = 'expensive'
+    elif 'cheap' in text_lower or 'budget' in text_lower or 'affordable' in text_lower:
+        filters['intent'] = 'cheap'
+    elif 'best' in text_lower or 'top' in text_lower or 'popular' in text_lower or 'highest rated' in text_lower:
+        filters['intent'] = 'best'
+    elif 'recommend' in text_lower or 'show me' in text_lower:
+        filters['intent'] = 'recommend'
+    
+    # If price filters exist and intent is still default, set to price_range
+    if (filters['min_price'] or filters['max_price']) and filters['intent'] == 'recommend':
+        filters['intent'] = 'price_range'
+    
+    return filters
 
 # -----------------------------
 # RESPONSE GENERATION
@@ -430,40 +411,35 @@ def get_response(user_input):
     categories_list = [cat.lower() for cat in df['category'].dropna().unique()]
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
-    text = corrected_input.lower()
-
-    print(f"\n=== USER INPUT ===")
-    print(f"Original: {user_input}")
-    print(f"Corrected: {corrected_input}")
-
-    # Predict intent
+    
+    # Predict intent from model
     try:
-        intent = predict_intent(corrected_input)
+        model_intent = predict_intent(corrected_input)
     except:
-        intent = "unknown"
+        model_intent = "unknown"
     
-    print(f"Predicted intent: {intent}")
+    # Check for special intents
+    text_lower = corrected_input.lower()
     
-    # Check for category intent
-    if any(phrase in text for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories"]):
-        intent = "categories"
-
-    # Greeting
-    if intent == "greeting":
+    if any(phrase in text_lower for phrase in ["show categories", "what categories", "list categories", "all categories", "available categories"]):
+        return {
+            "type": "categories",
+            "message": "Here are all the product categories available in our store! 🛍️",
+            "data": None
+        }
+    
+    if model_intent == "greeting":
         return {
             "type": "text",
             "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
             "data": None
         }
-
-    # Thank you responses
-    if intent == "thanks":
+    
+    if model_intent == "thanks":
         thank_messages = [
             "You're very welcome! 😊 Happy shopping! Is there anything else I can help you with?",
             "My pleasure! 🛍️ Let me know if you need more recommendations!",
-            "Anytime! 🙌 Feel free to ask if you want to explore more products!",
-            "Glad I could help! 🎯 What would you like to look for next?",
-            "You got it! 👍 Ready to find your next favorite Adidas item?"
+            "Anytime! 🙌 Feel free to ask if you want to explore more products!"
         ]
         import random
         return {
@@ -471,163 +447,102 @@ def get_response(user_input):
             "message": random.choice(thank_messages),
             "data": None
         }
-
-    # Help - NOW SHOWS EXAMPLES ONLY HERE
-    if intent == "help":
+    
+    if model_intent == "help":
         return {
             "type": "help",
             "message": "Here are some things you can ask me 😊",
             "data": None
         }
     
-    # Show categories
-    if intent == "categories":
-        return {
-            "type": "categories",
-            "message": "Here are all the product categories available in our store! 🛍️",
-            "data": None
-        }
-
-    # -----------------------------
-    # DEFAULT SETTINGS
-    # -----------------------------
-    limit = 5
+    # Extract all filters from the query
+    filters = extract_filters(user_input)
     
-    # Check if user specified a number
-    for word in text.split():
+    # Set limit (default 5, can be changed by user)
+    limit = 5
+    for word in text_lower.split():
         if word.isdigit():
             requested = int(word)
-            if requested < 5:
-                limit = requested
-            else:
-                limit = 5
-
-    # Extract category
-    category = extract_category(text)
-    print(f"Extracted category: {category}")
+            limit = min(requested, 5)  # Max 5 products
     
-    # Extract color
-    color = extract_color(text)
-    print(f"Extracted color: {color}")
-
-    # Extract price range
-    min_price, max_price = extract_price_range(text)
-    print(f"Price range: min={min_price}, max={max_price}")
-
-    # -----------------------------
-    # INTENT DETECTION
-    # -----------------------------
-    if "expensive" in text or "premium" in text or "luxury" in text or "most expensive" in text:
-        intent = "expensive"
-    elif "cheap" in text or "budget" in text or "affordable" in text:
-        intent = "cheap"
-    elif "best" in text or "top" in text or "popular" in text:
-        intent = "best"
-    elif "recommend" in text or "show me" in text or "give me" in text:
-        intent = "recommend"
-    
-    print(f"Final intent: {intent}")
-
-    # -----------------------------
-    # FILTER DATA
-    # -----------------------------
+    # Apply filters to dataframe
     result = df.copy()
     
-    print(f"Initial result count: {len(result)}")
-
-    if category:
-        result = result[result['category'] == category]  # Exact match
-        print(f"After category filter '{category}': {len(result)} products")
-
-    if color:
-        result = result[result['color'] == color]  # Exact match
-        print(f"After color filter '{color}': {len(result)} products")
-
-    if min_price:
-        result = result[result['price'] >= min_price]
-        print(f"After min price {min_price}: {len(result)} products")
+    if filters['category']:
+        result = result[result['category'] == filters['category']]
     
-    if max_price:
-        result = result[result['price'] <= max_price]
-        print(f"After max price {max_price}: {len(result)} products")
-
+    if filters['color']:
+        result = result[result['color'] == filters['color']]
+    
+    if filters['min_price']:
+        result = result[result['price'] >= filters['min_price']]
+    
+    if filters['max_price']:
+        result = result[result['price'] <= filters['max_price']]
+    
+    # Check if we have results
     if result.empty:
         # Build helpful message
-        if min_price and max_price:
-            price_msg = f"between ${min_price:.0f} and ${max_price:.0f}"
-        elif min_price:
-            price_msg = f"above ${min_price:.0f}"
-        elif max_price:
-            price_msg = f"under ${max_price:.0f}"
-        else:
-            price_msg = ""
+        conditions = []
+        if filters['color']:
+            conditions.append(f"color '{filters['color']}'")
+        if filters['category']:
+            conditions.append(f"category '{filters['category']}'")
+        if filters['min_price'] and filters['max_price']:
+            conditions.append(f"price between ${filters['min_price']:.0f} and ${filters['max_price']:.0f}")
+        elif filters['max_price']:
+            conditions.append(f"price under ${filters['max_price']:.0f}")
+        elif filters['min_price']:
+            conditions.append(f"price above ${filters['min_price']:.0f}")
         
-        color_msg = f" {color}" if color else ""
-        category_msg = f" in {category}" if category else ""
+        if conditions:
+            msg = f"I couldn't find products with {', '.join(conditions)}. Try different filters! 😊"
+        else:
+            msg = "I couldn't find matching products. Try asking for 'shoes under 100' or 'show me black shoes'! 😊"
         
         return {
             "type": "text",
-            "message": f"I couldn't find matching products{color_msg} {price_msg}{category_msg}. Try changing your filters! 😊",
+            "message": msg,
             "data": None
         }
-
-    # -----------------------------
-    # RECOMMENDATION LOGIC
-    # -----------------------------
-    if intent == "expensive":
-        result = result[result['price'] > 0].sort_values(by='price', ascending=False).head(limit)
-        price_msg = f"above ${min_price:.0f}" if min_price else ""
-        return {
-            "type": "dataframe",
-            "message": f"Here are the {len(result)} most expensive products{f' in {color}' if color else ''} {price_msg}{f' in {category}' if category else ''} 💎",
-            "data": result[['product_name','category','price','color','popularity_index']]
-        }
     
-    elif intent == "cheap":
-        result = result[result['price'] > 0].sort_values(by='price').head(limit)
-        price_msg = f"under ${max_price:.0f}" if max_price else ""
-        return {
-            "type": "dataframe",
-            "message": f"Here are {len(result)} budget-friendly products{f' in {color}' if color else ''} {price_msg} 💰",
-            "data": result[['product_name','category','price','color','popularity_index']]
-        }
-
-    elif intent == "best":
-        result = result[result['popularity_index'] > 0].sort_values(by='popularity_index', ascending=False).head(limit)
-        return {
-            "type": "dataframe",
-            "message": f"Here are the top {len(result)} highest-rated products{f' in {color}' if color else ''} ⭐",
-            "data": result[['product_name','category','popularity_index','price','color']]
-        }
-
-    elif intent == "price_range":
-        result = result[result['price'] > 0].sort_values(by='price').head(limit)
-        if min_price and max_price:
-            return {
-                "type": "dataframe",
-                "message": f"Here are {len(result)} products between ${min_price:.0f} and ${max_price:.0f}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
-                "data": result[['product_name','category','price','color','popularity_index']]
-            }
-        elif max_price:
-            return {
-                "type": "dataframe",
-                "message": f"Here are {len(result)} products under ${max_price:.0f}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
-                "data": result[['product_name','category','price','color','popularity_index']]
-            }
-        elif min_price:
-            return {
-                "type": "dataframe",
-                "message": f"Here are {len(result)} products above ${min_price:.0f}{f' in {color}' if color else ''}{f' in {category}' if category else ''} 💰",
-                "data": result[['product_name','category','price','color','popularity_index']]
-            }
-
+    # Sort based on intent
+    if filters['intent'] == 'expensive':
+        result = result[result['price'] > 0].sort_values('price', ascending=False).head(limit)
+        msg = f"Here are the {len(result)} most expensive products"
+    elif filters['intent'] == 'cheap':
+        result = result[result['price'] > 0].sort_values('price').head(limit)
+        msg = f"Here are {len(result)} budget-friendly products"
+    elif filters['intent'] == 'best':
+        result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False).head(limit)
+        msg = f"Here are the top {len(result)} highest-rated products"
+    elif filters['intent'] == 'price_range':
+        result = result[result['price'] > 0].sort_values('price').head(limit)
+        if filters['min_price'] and filters['max_price']:
+            msg = f"Here are {len(result)} products between ${filters['min_price']:.0f} and ${filters['max_price']:.0f}"
+        elif filters['max_price']:
+            msg = f"Here are {len(result)} products under ${filters['max_price']:.0f}"
+        elif filters['min_price']:
+            msg = f"Here are {len(result)} products above ${filters['min_price']:.0f}"
+        else:
+            msg = f"Here are {len(result)} recommended products"
     else:
-        result = result[result['popularity_index'] > 0].sort_values(by='popularity_index', ascending=False).head(limit)
-        return {
-            "type": "dataframe",
-            "message": f"Here are {len(result)} recommended products{f' in {color}' if color else ''} 👍",
-            "data": result[['product_name','category','price','popularity_index','color']]
-        }
+        result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False).head(limit)
+        msg = f"Here are {len(result)} recommended products"
+    
+    # Add color and category to message
+    if filters['color']:
+        msg += f" in {filters['color']}"
+    if filters['category']:
+        msg += f" in {filters['category']}"
+    
+    msg += " 🛍️"
+    
+    return {
+        "type": "dataframe",
+        "message": msg,
+        "data": result[['product_name', 'category', 'price', 'color', 'popularity_index']]
+    }
 
 # -----------------------------
 # CHAT UI
