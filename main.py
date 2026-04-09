@@ -93,6 +93,10 @@ def load_data():
 
 df = load_data()
 
+# Get all categories and colors for matching
+ALL_CATEGORIES = df['category'].dropna().unique().tolist()
+ALL_COLORS = df['color'].dropna().unique().tolist()
+
 # -----------------------------
 # TYPO CORRECTION FUNCTION
 # -----------------------------
@@ -294,7 +298,7 @@ def display_categories():
                 st.write(f"• {product['product_name']}{color_info} - ${product.get('price', 0):.2f}")
 
 # -----------------------------
-# EXTRACT PRICE RANGE FROM QUERY - SIMPLIFIED FIXED VERSION
+# EXTRACT PRICE RANGE FROM QUERY - IMPROVED VERSION
 # -----------------------------
 def extract_price_range(text):
     """Extract min and max price from user query"""
@@ -328,7 +332,14 @@ def extract_price_range(text):
         max_price = float(between_match.group(2))
         return min_price, max_price
     
-    # Look for single number (could be max or min)
+    # Look for single number at the end of query like "shoes 100"
+    # This pattern catches "shoes 100" where a number follows a category
+    number_at_end = re.search(r'(?:shoes|clothing|accessories)\s+(\d+)$', text)
+    if number_at_end:
+        max_price = float(number_at_end.group(1))
+        return min_price, max_price
+    
+    # Look for single number
     numbers = re.findall(r'\b(\d+)\b', text)
     if numbers:
         num = float(numbers[0])
@@ -338,31 +349,88 @@ def extract_price_range(text):
         # If "under" or "below" is in text, it's max price  
         elif 'under' in text or 'below' in text:
             max_price = num
-        # If it's a simple query like "shoes 100", treat as max price
-        elif len(numbers) == 1 and not any(word in text for word in ['cheap', 'best', 'expensive']):
+        # If it's a simple query like "shoes 100" or just a number after category
+        elif len(numbers) == 1 and not any(word in text for word in ['cheap', 'best', 'expensive', 'between']):
             max_price = num
     
     return min_price, max_price
 
 # -----------------------------
-# CHECK IF QUERY IS VALID
+# EXTRACT CATEGORY FROM QUERY - IMPROVED VERSION
 # -----------------------------
-def is_valid_query(user_input):
-    """Check if the user query is valid for product search"""
-    valid_keywords = [
-        'cheap', 'best', 'expensive', 'recommend', 'show', 'find', 'get', 'give',
-        'shoes', 'clothing', 'accessories', 'originals', 'soccer', 'running',
-        'black', 'white', 'blue', 'red', 'pink', 'green', 'purple', 'grey', 'yellow',
-        'under', 'below', 'less', 'than', 'above', 'over', 'more', 'between', 'price', 
-        'budget', 'affordable', 'top', 'rated', 'popular', 'highest', 'premium', 'luxury'
-    ]
+def extract_category(text):
+    """Extract category from user query"""
+    text_lower = text.lower()
     
-    # Also check for category names
-    categories = [cat.lower() for cat in df['category'].dropna().unique()]
-    valid_keywords.extend(categories)
+    # Category mapping for common variations
+    category_variations = {
+        'clothing': ['clothing', 'cloth', 'clothes', 'apparel', 'wear'],
+        'shoes': ['shoes', 'shoe', 'footwear', 'sneakers', 'trainers'],
+        'accessories': ['accessories', 'accessory', 'bag', 'bags', 'hat', 'hats', 'socks'],
+        'originals': ['originals', 'original'],
+        'soccer': ['soccer', 'football', 'cleats'],
+        'running': ['running', 'run', 'jogging'],
+        'training': ['training', 'train', 'workout', 'gym'],
+        'swim': ['swim', 'swimming', 'pool'],
+        'kids': ['kids', 'child', 'children', 'toddler', 'infant'],
+        'men': ['men', 'man', 'male'],
+        'women': ['women', 'woman', 'female', 'lady']
+    }
     
-    text = user_input.lower()
-    return any(keyword in text for keyword in valid_keywords)
+    # First try exact match with categories in dataset
+    for cat in ALL_CATEGORIES:
+        if cat.lower() in text_lower:
+            return cat
+    
+    # Then try variations
+    for standard_cat, variations in category_variations.items():
+        for var in variations:
+            if var in text_lower:
+                # Find matching category in dataset
+                for cat in ALL_CATEGORIES:
+                    if standard_cat.lower() in cat.lower():
+                        return cat
+    
+    return None
+
+# -----------------------------
+# EXTRACT COLOR FROM QUERY - IMPROVED VERSION
+# -----------------------------
+def extract_color(text):
+    """Extract color from user query with better matching"""
+    text_lower = text.lower()
+    
+    # First try exact match with colors in dataset
+    for col in ALL_COLORS:
+        if col.lower() in text_lower:
+            return col
+    
+    # Color mapping for common variations
+    color_variations = {
+        'Black': ['black', 'blk', 'dark'],
+        'White': ['white', 'wht', 'ivory', 'cream'],
+        'Blue': ['blue', 'blu', 'navy', 'sky blue'],
+        'Red': ['red', 'crimson', 'scarlet'],
+        'Pink': ['pink', 'rose', 'magenta'],
+        'Green': ['green', 'grn', 'lime', 'emerald'],
+        'Purple': ['purple', 'violet', 'lavender', 'lilac'],
+        'Grey': ['grey', 'gray', 'silver', 'charcoal'],
+        'Yellow': ['yellow', 'yel', 'gold', 'amber'],
+        'Gold': ['gold', 'golden'],
+        'Beige': ['beige', 'tan', 'cream', 'nude'],
+        'Burgundy': ['burgundy', 'maroon', 'wine', 'crimson'],
+        'Multicolor': ['multicolor', 'multi-color', 'colorful', 'rainbow']
+    }
+    
+    for color_name, variations in color_variations.items():
+        for var in variations:
+            if var in text_lower:
+                # Check if this color exists in dataset
+                for col in ALL_COLORS:
+                    if col.lower() == color_name.lower():
+                        return col
+    
+    return None
 
 # -----------------------------
 # RESPONSE GENERATION
@@ -438,20 +506,11 @@ def get_response(user_input):
             else:
                 limit = 5
 
-    # Extract category
-    category = None
-    for cat in df['category'].dropna().unique():
-        if cat.lower() in text:
-            category = cat
-            break
-
-    # Extract color
-    color = None
-    colors_list = df['color'].dropna().unique()
-    for col in colors_list:
-        if col.lower() in text:
-            color = col
-            break
+    # Extract category - USING IMPROVED FUNCTION
+    category = extract_category(text)
+    
+    # Extract color - USING IMPROVED FUNCTION
+    color = extract_color(text)
 
     # Extract price range (min and max)
     min_price, max_price = extract_price_range(text)
@@ -500,9 +559,12 @@ def get_response(user_input):
         else:
             price_msg = ""
         
+        color_msg = f" in {color}" if color else ""
+        category_msg = f" in {category}" if category else ""
+        
         return {
             "type": "text",
-            "message": f"I couldn't find matching products{f' in {color}' if color else ''} {price_msg}{f' in {category}' if category else ''}. Try changing your filters! 😊",
+            "message": f"I couldn't find matching products{color_msg} {price_msg}{category_msg}. Try changing your filters! 😊",
             "data": None
         }
 
