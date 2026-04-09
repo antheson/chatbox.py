@@ -203,7 +203,9 @@ def show_examples():
 ### 💡 You can try asking:
 - shoes under 100  
 - clothing under 50  
-- show me black shoes  
+- white clothing  
+- black shoes  
+- blue shoes under 80  
 - best shoes  
 - shoes between 50 and 150  
 - most expensive shoes  
@@ -311,7 +313,7 @@ def extract_filters(text):
         'intent': 'recommend'  # default intent
     }
     
-    # 1. Extract category
+    # 1. Extract category - FIRST, look for exact category matches
     for cat in ALL_CATEGORIES:
         if cat.lower() in text_lower:
             filters['category'] = cat
@@ -319,34 +321,52 @@ def extract_filters(text):
     
     # If no direct category match, try mapping common words
     if not filters['category']:
+        # Map common words to categories
         if 'shoe' in text_lower or 'sneaker' in text_lower or 'footwear' in text_lower:
             for cat in ALL_CATEGORIES:
                 if cat.lower() == 'shoes':
                     filters['category'] = cat
                     break
-        elif 'cloth' in text_lower or 'apparel' in text_lower or 'wear' in text_lower:
+        elif 'cloth' in text_lower or 'apparel' in text_lower or 'wear' in text_lower or 'shirt' in text_lower or 'pants' in text_lower or 'jacket' in text_lower or 'hoodie' in text_lower:
             for cat in ALL_CATEGORIES:
                 if cat.lower() == 'clothing':
                     filters['category'] = cat
                     break
-        elif 'accessorie' in text_lower or 'bag' in text_lower or 'hat' in text_lower:
+        elif 'accessorie' in text_lower or 'bag' in text_lower or 'hat' in text_lower or 'sock' in text_lower:
             for cat in ALL_CATEGORIES:
                 if cat.lower() == 'accessories':
                     filters['category'] = cat
                     break
+        elif 'originals' in text_lower:
+            for cat in ALL_CATEGORIES:
+                if cat.lower() == 'originals':
+                    filters['category'] = cat
+                    break
+        elif 'soccer' in text_lower:
+            for cat in ALL_CATEGORIES:
+                if cat.lower() == 'soccer':
+                    filters['category'] = cat
+                    break
+        elif 'running' in text_lower:
+            for cat in ALL_CATEGORIES:
+                if cat.lower() == 'running':
+                    filters['category'] = cat
+                    break
     
-    # 2. Extract color
+    # 2. Extract color - Look for color names in the query
+    # First check exact matches with dataset colors
     for col in ALL_COLORS:
         if col.lower() in text_lower:
             filters['color'] = col
             break
     
-    # Color mapping for variations
+    # If no exact match, try color mapping for variations
     if not filters['color']:
         color_map = {
             'black': 'Black', 'white': 'White', 'blue': 'Blue', 'red': 'Red',
             'pink': 'Pink', 'green': 'Green', 'purple': 'Purple', 'grey': 'Grey',
-            'gray': 'Grey', 'yellow': 'Yellow', 'gold': 'Gold', 'beige': 'Beige'
+            'gray': 'Grey', 'yellow': 'Yellow', 'gold': 'Gold', 'beige': 'Beige',
+            'burgundy': 'Burgundy', 'multicolor': 'Multicolor', 'multi-color': 'Multicolor'
         }
         for color_word, color_actual in color_map.items():
             if color_word in text_lower and color_actual in ALL_COLORS:
@@ -377,7 +397,7 @@ def extract_filters(text):
         filters['max_price'] = float(to_match.group(2))
     
     # Pattern: number after category like "shoes 100"
-    number_after_category = re.search(r'(?:shoes?|clothing|accessories)\s+(\d+)', text_lower)
+    number_after_category = re.search(r'(?:shoes?|clothing|accessories|products?)\s+(\d+)', text_lower)
     if number_after_category and not filters['max_price']:
         filters['max_price'] = float(number_after_category.group(1))
     
@@ -387,7 +407,7 @@ def extract_filters(text):
         if len(numbers) == 1:
             filters['max_price'] = float(numbers[0])
     
-    # 4. Extract intent based on keywords (but don't override price filters)
+    # 4. Extract intent based on keywords
     if 'expensive' in text_lower or 'premium' in text_lower or 'luxury' in text_lower:
         filters['intent'] = 'expensive'
     elif 'cheap' in text_lower or 'budget' in text_lower or 'affordable' in text_lower:
@@ -498,7 +518,7 @@ def get_response(user_input):
         if conditions:
             msg = f"I couldn't find products with {', '.join(conditions)}. Try different filters! 😊"
         else:
-            msg = "I couldn't find matching products. Try asking for 'shoes under 100' or 'show me black shoes'! 😊"
+            msg = "I couldn't find matching products. Try asking for 'shoes under 100' or 'white clothing'! 😊"
         
         return {
             "type": "text",
@@ -530,9 +550,11 @@ def get_response(user_input):
         result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False).head(limit)
         msg = f"Here are {len(result)} recommended products"
     
-    # Add color and category to message
+    # Add color to message
     if filters['color']:
         msg += f" in {filters['color']}"
+    
+    # Add category to message
     if filters['category']:
         msg += f" in {filters['category']}"
     
