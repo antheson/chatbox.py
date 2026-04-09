@@ -192,7 +192,7 @@ def predict_intent(text):
     return model.predict(vectorizer.transform([corrected_text.lower()]))[0]
 
 # -----------------------------
-# SHOW EXAMPLE QUESTIONS
+# SHOW EXAMPLE QUESTIONS (ONLY WHEN HELP IS REQUESTED)
 # -----------------------------
 def show_examples():
     st.markdown("""
@@ -388,8 +388,8 @@ def get_response(user_input):
     if intent == "greeting":
         return {
             "type": "text",
-            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!\n\nTry:\n- cheap shoes under 100\n- shoes above 100\n- clothing under 50\n- shoes between 50 and 150\n- most expensive shoes\n- best clothing",
-            "data": "SHOW_EXAMPLES"
+            "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
+            "data": None
         }
 
     # Thank you responses
@@ -408,12 +408,12 @@ def get_response(user_input):
             "data": None
         }
 
-    # Help
+    # Help - NOW SHOWS EXAMPLES ONLY HERE
     if intent == "help":
         return {
-            "type": "text",
+            "type": "help",
             "message": "Here are some things you can ask me 😊",
-            "data": "SHOW_EXAMPLES"
+            "data": None
         }
     
     # Show categories
@@ -588,6 +588,8 @@ with chat_container:
                 
                 if response_type == "categories":
                     display_categories()
+                elif response_type == "help":
+                    show_examples()
                 elif data_value is not None:
                     if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                         show_examples()
@@ -626,6 +628,8 @@ if user_input:
             
             if response_type == "categories":
                 display_categories()
+            elif response_type == "help":
+                show_examples()
             elif data_value is not None:
                 if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                     show_examples()
