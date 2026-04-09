@@ -301,126 +301,85 @@ def display_categories():
 # EXTRACT ALL FILTERS FROM QUERY
 # -----------------------------
 def extract_filters(text):
-    """Extract all filters from user query"""
     text_lower = text.lower()
-    
-    # Initialize filters
+
     filters = {
         'category': None,
         'color': None,
         'min_price': None,
         'max_price': None,
-        'intent': 'recommend'  # default intent
+        'intent': 'recommend'
     }
-    
-    # 1. Extract category - FIRST, look for exact category matches
+
+    # -----------------------------
+    # CATEGORY DETECTION (IMPROVED)
+    # -----------------------------
     for cat in ALL_CATEGORIES:
         if cat.lower() in text_lower:
             filters['category'] = cat
             break
-    
-    # If no direct category match, try mapping common words
+
     if not filters['category']:
-        # Map common words to categories
-        if 'shoe' in text_lower or 'sneaker' in text_lower or 'footwear' in text_lower:
-            for cat in ALL_CATEGORIES:
-                if cat.lower() == 'shoes':
-                    filters['category'] = cat
-                    break
-        elif 'cloth' in text_lower or 'apparel' in text_lower or 'wear' in text_lower or 'shirt' in text_lower or 'pants' in text_lower or 'jacket' in text_lower or 'hoodie' in text_lower:
-            for cat in ALL_CATEGORIES:
-                if cat.lower() == 'clothing':
-                    filters['category'] = cat
-                    break
-        elif 'accessorie' in text_lower or 'bag' in text_lower or 'hat' in text_lower or 'sock' in text_lower:
-            for cat in ALL_CATEGORIES:
-                if cat.lower() == 'accessories':
-                    filters['category'] = cat
-                    break
-        elif 'originals' in text_lower:
-            for cat in ALL_CATEGORIES:
-                if cat.lower() == 'originals':
-                    filters['category'] = cat
-                    break
-        elif 'soccer' in text_lower:
-            for cat in ALL_CATEGORIES:
-                if cat.lower() == 'soccer':
-                    filters['category'] = cat
-                    break
-        elif 'running' in text_lower:
-            for cat in ALL_CATEGORIES:
-                if cat.lower() == 'running':
-                    filters['category'] = cat
-                    break
-    
-    # 2. Extract color - Look for color names in the query
-    # First check exact matches with dataset colors
-    for col in ALL_COLORS:
-        if col.lower() in text_lower:
-            filters['color'] = col
+        if any(word in text_lower for word in ['shoe', 'sneaker', 'trainer']):
+            filters['category'] = 'shoes'
+        elif any(word in text_lower for word in ['cloth', 'shirt', 'pants', 'jacket', 'hoodie']):
+            filters['category'] = 'clothing'
+        elif any(word in text_lower for word in ['bag', 'sock', 'hat', 'accessor']):
+            filters['category'] = 'accessories'
+
+    # -----------------------------
+    # COLOR DETECTION (IMPROVED)
+    # -----------------------------
+    color_keywords = [
+        'black','white','blue','red','green','yellow',
+        'pink','purple','grey','gray','beige','gold'
+    ]
+
+    for color in color_keywords:
+        if color in text_lower:
+            filters['color'] = color
             break
-    
-    # If no exact match, try color mapping for variations
-    if not filters['color']:
-        color_map = {
-            'black': 'Black', 'white': 'White', 'blue': 'Blue', 'red': 'Red',
-            'pink': 'Pink', 'green': 'Green', 'purple': 'Purple', 'grey': 'Grey',
-            'gray': 'Grey', 'yellow': 'Yellow', 'gold': 'Gold', 'beige': 'Beige',
-            'burgundy': 'Burgundy', 'multicolor': 'Multicolor', 'multi-color': 'Multicolor'
-        }
-        for color_word, color_actual in color_map.items():
-            if color_word in text_lower and color_actual in ALL_COLORS:
-                filters['color'] = color_actual
-                break
-    
-    # 3. Extract price range
-    # Pattern: under X, below X, less than X
-    under_match = re.search(r'(?:under|below|less than)\s+(\d+)', text_lower)
+
+    # -----------------------------
+    # PRICE DETECTION
+    # -----------------------------
+    import re
+
+    under_match = re.search(r'(under|below|less than)\s+(\d+)', text_lower)
     if under_match:
-        filters['max_price'] = float(under_match.group(1))
-    
-    # Pattern: above X, over X, more than X
-    above_match = re.search(r'(?:above|over|more than)\s+(\d+)', text_lower)
+        filters['max_price'] = float(under_match.group(2))
+
+    above_match = re.search(r'(above|over|more than)\s+(\d+)', text_lower)
     if above_match:
-        filters['min_price'] = float(above_match.group(1))
-    
-    # Pattern: between X and Y
+        filters['min_price'] = float(above_match.group(2))
+
     between_match = re.search(r'between\s+(\d+)\s+and\s+(\d+)', text_lower)
     if between_match:
         filters['min_price'] = float(between_match.group(1))
         filters['max_price'] = float(between_match.group(2))
-    
-    # Pattern: X to Y
+
     to_match = re.search(r'(\d+)\s+to\s+(\d+)', text_lower)
     if to_match and not between_match:
         filters['min_price'] = float(to_match.group(1))
         filters['max_price'] = float(to_match.group(2))
-    
-    # Pattern: number after category like "shoes 100"
-    number_after_category = re.search(r'(?:shoes?|clothing|accessories|products?)\s+(\d+)', text_lower)
-    if number_after_category and not filters['max_price']:
-        filters['max_price'] = float(number_after_category.group(1))
-    
-    # Pattern: single number (treat as max price)
+
+    # fallback single number
     numbers = re.findall(r'\b(\d+)\b', text_lower)
-    if numbers and not filters['min_price'] and not filters['max_price']:
-        if len(numbers) == 1:
-            filters['max_price'] = float(numbers[0])
-    
-    # 4. Extract intent based on keywords
-    if 'expensive' in text_lower or 'premium' in text_lower or 'luxury' in text_lower:
-        filters['intent'] = 'expensive'
-    elif 'cheap' in text_lower or 'budget' in text_lower or 'affordable' in text_lower:
+    if numbers and not filters['max_price']:
+        filters['max_price'] = float(numbers[0])
+
+    # -----------------------------
+    # INTENT DETECTION
+    # -----------------------------
+    if 'cheap' in text_lower:
         filters['intent'] = 'cheap'
-    elif 'best' in text_lower or 'top' in text_lower or 'popular' in text_lower or 'highest rated' in text_lower:
+    elif 'expensive' in text_lower or 'premium' in text_lower:
+        filters['intent'] = 'expensive'
+    elif 'best' in text_lower or 'top' in text_lower:
         filters['intent'] = 'best'
-    elif 'recommend' in text_lower or 'show me' in text_lower:
-        filters['intent'] = 'recommend'
-    
-    # If price filters exist and intent is still default, set to price_range
-    if (filters['min_price'] or filters['max_price']) and filters['intent'] == 'recommend':
+    elif filters['min_price'] or filters['max_price']:
         filters['intent'] = 'price_range'
-    
+
     return filters
 
 # -----------------------------
@@ -488,11 +447,14 @@ def get_response(user_input):
     # Apply filters to dataframe
     result = df.copy()
     
+    # -----------------------------
+    # APPLY FILTERS (FIXED)
+    # -----------------------------
     if filters['category']:
-        result = result[result['category'] == filters['category']]
+        result = result[result['category'].str.contains(filters['category'], case=False, na=False)]
     
     if filters['color']:
-        result = result[result['color'] == filters['color']]
+        result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
     
     if filters['min_price']:
         result = result[result['price'] >= filters['min_price']]
