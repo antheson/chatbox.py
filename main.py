@@ -340,10 +340,20 @@ def extract_filters(text):
             filters['color'] = color
             break
 
-    # -----------------------------
-    # PRICE DETECTION
-    # -----------------------------
-    import re
+# -----------------------------
+# PRICE DETECTION (FINAL FIX)
+# -----------------------------
+import re
+
+# Pattern: between X and Y OR X-Y
+between_match = re.search(r'(?:between\s+)?(\d+)\s*(?:and|-)\s*(\d+)', text_lower)
+
+if between_match:
+    filters['min_price'] = float(between_match.group(1))
+    filters['max_price'] = float(between_match.group(2))
+
+else:
+    # Only run these if BETWEEN not detected
 
     under_match = re.search(r'(under|below|less than)\s+(\d+)', text_lower)
     if under_match:
@@ -353,21 +363,17 @@ def extract_filters(text):
     if above_match:
         filters['min_price'] = float(above_match.group(2))
 
-    between_match = re.search(r'between\s+(\d+)\s+and\s+(\d+)', text_lower)
-    if between_match:
-        filters['min_price'] = float(between_match.group(1))
-        filters['max_price'] = float(between_match.group(2))
-
     to_match = re.search(r'(\d+)\s+to\s+(\d+)', text_lower)
-    if to_match and not between_match:
+    if to_match:
         filters['min_price'] = float(to_match.group(1))
         filters['max_price'] = float(to_match.group(2))
 
-    # fallback single number
-    numbers = re.findall(r'\b(\d+)\b', text_lower)
-    if numbers and not filters['max_price']:
-        filters['max_price'] = float(numbers[0])
-
+    # Fallback (ONLY if nothing else detected)
+    if filters['min_price'] is None and filters['max_price'] is None:
+        numbers = re.findall(r'\b(\d+)\b', text_lower)
+        if len(numbers) == 1:
+            filters['max_price'] = float(numbers[0])
+            
     # -----------------------------
     # INTENT DETECTION
     # -----------------------------
