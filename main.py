@@ -312,6 +312,57 @@ def extract_filters(text):
     }
 
     # -----------------------------
+    # PRICE DETECTION (FINAL FIX)
+    # -----------------------------
+    import re
+    
+    # Pattern: between X and Y OR X-Y
+    between_match = re.search(r'(?:between\s+)?(\d+)\s*(?:and|-)\s*(\d+)', text_lower)
+    
+    if between_match:
+        filters['min_price'] = float(between_match.group(1))
+        filters['max_price'] = float(between_match.group(2))
+    
+    else:
+        # Only run these if BETWEEN not detected
+    
+        under_match = re.search(r'(under|below|less than)\s+(\d+)', text_lower)
+        if under_match:
+            filters['max_price'] = float(under_match.group(2))
+    
+        above_match = re.search(r'(above|over|more than)\s+(\d+)', text_lower)
+        if above_match:
+            filters['min_price'] = float(above_match.group(2))
+    
+        to_match = re.search(r'(\d+)\s+to\s+(\d+)', text_lower)
+        if to_match:
+            filters['min_price'] = float(to_match.group(1))
+            filters['max_price'] = float(to_match.group(2))
+    
+        # Fallback (ONLY if nothing else detected)
+        if filters['min_price'] is None and filters['max_price'] is None:
+            numbers = re.findall(r'\b(\d+)\b', text_lower)
+            if len(numbers) == 1:
+                filters['max_price'] = float(numbers[0])
+    
+    
+    # -----------------------------
+    # INTENT DETECTION (MOVE OUTSIDE)
+    # -----------------------------
+    if 'cheap' in text_lower:
+        filters['intent'] = 'cheap'
+    elif 'expensive' in text_lower or 'premium' in text_lower:
+        filters['intent'] = 'expensive'
+    elif 'best' in text_lower or 'top' in text_lower:
+        filters['intent'] = 'best'
+    elif filters['min_price'] or filters['max_price']:
+        filters['intent'] = 'price_range'
+    
+    
+    return filters
+
+
+    # -----------------------------
     # CATEGORY DETECTION (IMPROVED)
     # -----------------------------
     for cat in ALL_CATEGORIES:
@@ -340,55 +391,6 @@ def extract_filters(text):
             filters['color'] = color
             break
 
-# -----------------------------
-# PRICE DETECTION (FINAL FIX)
-# -----------------------------
-import re
-
-# Pattern: between X and Y OR X-Y
-between_match = re.search(r'(?:between\s+)?(\d+)\s*(?:and|-)\s*(\d+)', text_lower)
-
-if between_match:
-    filters['min_price'] = float(between_match.group(1))
-    filters['max_price'] = float(between_match.group(2))
-
-else:
-    # Only run these if BETWEEN not detected
-
-    under_match = re.search(r'(under|below|less than)\s+(\d+)', text_lower)
-    if under_match:
-        filters['max_price'] = float(under_match.group(2))
-
-    above_match = re.search(r'(above|over|more than)\s+(\d+)', text_lower)
-    if above_match:
-        filters['min_price'] = float(above_match.group(2))
-
-    to_match = re.search(r'(\d+)\s+to\s+(\d+)', text_lower)
-    if to_match:
-        filters['min_price'] = float(to_match.group(1))
-        filters['max_price'] = float(to_match.group(2))
-
-    # Fallback (ONLY if nothing else detected)
-    if filters['min_price'] is None and filters['max_price'] is None:
-        numbers = re.findall(r'\b(\d+)\b', text_lower)
-        if len(numbers) == 1:
-            filters['max_price'] = float(numbers[0])
-
-
-# -----------------------------
-# INTENT DETECTION (MOVE OUTSIDE)
-# -----------------------------
-if 'cheap' in text_lower:
-    filters['intent'] = 'cheap'
-elif 'expensive' in text_lower or 'premium' in text_lower:
-    filters['intent'] = 'expensive'
-elif 'best' in text_lower or 'top' in text_lower:
-    filters['intent'] = 'best'
-elif filters['min_price'] or filters['max_price']:
-    filters['intent'] = 'price_range'
-
-
-return filters
 
 # -----------------------------
 # RESPONSE GENERATION
