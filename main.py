@@ -213,7 +213,7 @@ def show_examples():
 """)
 
 # -----------------------------
-# DISPLAY PRODUCTS (UI)
+# DISPLAY PRODUCTS (CLEAN MINIMAL CARDS)
 # -----------------------------
 def display_products(df_result, label="Recommended Products"):
     if df_result.empty:
@@ -223,48 +223,36 @@ def display_products(df_result, label="Recommended Products"):
     st.subheader(f"🏆 {label}")
 
     for i, (_, row) in enumerate(df_result.iterrows(), start=1):
-        with st.container():
-            # Create a card-like appearance
-            st.markdown(f"""
-            <div style="
-                border: 1px solid #e0e0e0;
-                border-radius: 10px;
-                padding: 15px;
-                margin-bottom: 15px;
-                background-color: #fafafa;
-            ">
-                <h3 style="margin-top: 0;">#{i} 🛍️ {row.get('product_name', 'Unknown')}</h3>
-            """, unsafe_allow_html=True)
-            
-            # Create 5 columns for key information
-            col1, col2, col3, col4, col5 = st.columns(5)
-            
-            with col1:
-                st.write(f"📂 **Category:** {row.get('category', 'N/A')}")
-            
-            with col2:
-                if 'color' in row:
-                    st.write(f"🎨 **Color:** {row.get('color', 'N/A')}")
-            
-            with col3:
-                if 'price' in row and row['price'] > 0:
-                    st.write(f"💰 **Price:** ${row['price']:.2f}")
-            
-            with col4:
-                if 'popularity_index' in row and row['popularity_index'] > 0:
-                    rating = row['popularity_index']
-                    stars = "⭐" * int(round(rating)) + "☆" * (5 - int(round(rating)))
-                    st.write(f"⭐ **Rating:** {stars} ({rating}/5)")
-            
-            with col5:
-                if 'review_count' in row and row['review_count'] > 0:
-                    st.write(f"📝 **Reviews:** {int(row['review_count'])}")
-            
-            # Show original price if available and different
-            if 'original_price' in row and row['original_price'] > row['price']:
-                st.caption(f"~~Original: ${row['original_price']:.2f}~~")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
+        name      = row.get('product_name', 'Unknown')
+        category  = row.get('category', 'N/A')
+        color     = row.get('color', 'N/A')
+        price     = row.get('price', 0)
+        price_str = f"${price:.2f}" if price and price > 0 else "N/A"
+
+        st.markdown(f"""
+        <div style="
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-bottom: 10px;
+            background-color: #fafafa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        ">
+            <div style="flex: 1; min-width: 0;">
+                <p style="margin: 0 0 4px 0; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    #{i} &nbsp; {name}
+                </p>
+                <p style="margin: 0; color: #888; font-size: 13px;">
+                    📂 {category} &nbsp;·&nbsp; 🎨 {color}
+                </p>
+            </div>
+            <div style="margin-left: 20px; text-align: right; flex-shrink: 0;">
+                <p style="margin: 0; font-size: 18px; font-weight: 700; color: #2e7d32;">{price_str}</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # -----------------------------
 # DISPLAY CATEGORIES (UI)
