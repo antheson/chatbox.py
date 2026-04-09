@@ -391,11 +391,16 @@ def get_response(user_input):
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
     
-    # Predict intent from model
-    try:
-        model_intent = predict_intent(corrected_input)
-    except:
-        model_intent = "unknown"
+    # Extract filters FIRST
+    filters = extract_filters(user_input)
+    
+    # Only use ML if no filters detected
+    model_intent = "unknown"
+    if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price']:
+        try:
+            model_intent = predict_intent(corrected_input)
+        except:
+            model_intent = "unknown"
     
     # Check for special intents
     text_lower = corrected_input.lower()
@@ -414,25 +419,34 @@ def get_response(user_input):
             "data": None
         }
     
-    if model_intent == "thanks":
-        thank_messages = [
-            "You're very welcome! 😊 Happy shopping! Is there anything else I can help you with?",
-            "My pleasure! 🛍️ Let me know if you need more recommendations!",
-            "Anytime! 🙌 Feel free to ask if you want to explore more products!"
-        ]
-        import random
-        return {
-            "type": "text",
-            "message": random.choice(thank_messages),
-            "data": None
-        }
+    # If user clearly asking for products → skip greeting
+    if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price']:
     
-    if model_intent == "help":
-        return {
-            "type": "help",
-            "message": "Here are some things you can ask me 😊",
-            "data": None
-        }
+        if model_intent == "greeting":
+            return {
+                "type": "text",
+                "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
+                "data": None
+            }
+    
+        if model_intent == "thanks":
+            import random
+            return {
+                "type": "text",
+                "message": random.choice([
+                    "You're very welcome! 😊",
+                    "My pleasure! 🛍️",
+                    "Anytime! 🙌"
+                ]),
+                "data": None
+            }
+    
+        if model_intent == "help":
+            return {
+                "type": "help",
+                "message": "Here are some things you can ask me 😊",
+                "data": None
+            }
     
     # Extract all filters from the query
     filters = extract_filters(user_input)
