@@ -386,7 +386,7 @@ else:
     elif filters['min_price'] or filters['max_price']:
         filters['intent'] = 'price_range'
 
-    return filters
+        return filters
 
 # -----------------------------
 # RESPONSE GENERATION
