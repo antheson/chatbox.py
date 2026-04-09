@@ -373,20 +373,22 @@ else:
         numbers = re.findall(r'\b(\d+)\b', text_lower)
         if len(numbers) == 1:
             filters['max_price'] = float(numbers[0])
-            
-    # -----------------------------
-    # INTENT DETECTION
-    # -----------------------------
-    if 'cheap' in text_lower:
-        filters['intent'] = 'cheap'
-    elif 'expensive' in text_lower or 'premium' in text_lower:
-        filters['intent'] = 'expensive'
-    elif 'best' in text_lower or 'top' in text_lower:
-        filters['intent'] = 'best'
-    elif filters['min_price'] or filters['max_price']:
-        filters['intent'] = 'price_range'
 
-        return filters
+
+# -----------------------------
+# INTENT DETECTION (MOVE OUTSIDE)
+# -----------------------------
+if 'cheap' in text_lower:
+    filters['intent'] = 'cheap'
+elif 'expensive' in text_lower or 'premium' in text_lower:
+    filters['intent'] = 'expensive'
+elif 'best' in text_lower or 'top' in text_lower:
+    filters['intent'] = 'best'
+elif filters['min_price'] or filters['max_price']:
+    filters['intent'] = 'price_range'
+
+
+return filters
 
 # -----------------------------
 # RESPONSE GENERATION
