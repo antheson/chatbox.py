@@ -30,15 +30,15 @@ st.markdown("""
         color: #1a237e;
     }
 
-    /* Red View → buttons in main area */
-    section[data-testid="stMain"] .stButton button {
+    /* Red View → button only */
+    .view-btn button {
         background-color: #e53935 !important;
         color: white !important;
         border: none !important;
         border-radius: 8px !important;
         font-weight: 600 !important;
     }
-    section[data-testid="stMain"] .stButton button:hover {
+    .view-btn button:hover {
         background-color: #b71c1c !important;
         color: white !important;
     }
@@ -426,7 +426,7 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
                 f'<div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;">'
                 f'<p style="margin:0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
-                f'<span style="font-weight:700;font-size:16px;color:#e53935;">{price_str}</span>'
+                f'<span style="font-weight:700;font-size:16px;color:#2e7d32;">{price_str}</span>'
                 f'</div>'
                 f'<p style="margin:4px 0 0 0;color:#888;font-size:13px;">'
                 f'📂 {category} &nbsp;·&nbsp; 🎨 {color}'
@@ -436,9 +436,11 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
                 unsafe_allow_html=True
             )
         with col_btn:
+            st.markdown('<div class="view-btn">', unsafe_allow_html=True)
             if st.button("View →", key=f"{card_key_prefix}_{i}_{idx}"):
                 st.session_state.selected_product = row.to_dict()
                 st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("<div style='margin-bottom:6px'></div>", unsafe_allow_html=True)
 
