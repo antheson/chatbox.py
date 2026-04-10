@@ -8,9 +8,9 @@ import re
 # -----------------------------
 # PAGE SETUP
 # -----------------------------
-st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
+st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")  # icon kept as emoji (external URLs not supported in page_icon)
 
-# Custom CSS to fix button at bottom
+# Custom CSS
 st.markdown("""
 <style>
     /* Sidebar conversation list buttons */
@@ -30,11 +30,30 @@ st.markdown("""
         color: #1a237e;
     }
 
-
+    /* Red View → buttons in main area */
+    section[data-testid="stMain"] .stButton button {
+        background-color: #e53935 !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+    }
+    section[data-testid="stMain"] .stButton button:hover {
+        background-color: #b71c1c !important;
+        color: white !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
+# Adidas logo + title
+st.markdown(
+    "<div style='display:flex;align-items:center;gap:14px;margin-bottom:4px;'>"
+    "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Adidas_Logo.svg/2560px-Adidas_Logo.svg.png'"
+    " style='height:34px;' />"
+    "<span style='font-size:22px;font-weight:700;'>ShopAssist AI &nbsp;·&nbsp; Adidas Recommendation Chatbot</span>"
+    "</div>",
+    unsafe_allow_html=True
+)
 
 # -----------------------------
 # LOAD DATASET
@@ -405,10 +424,12 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
 
             st.markdown(
                 f'<div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;">'
-                f'<p style="margin:0 0 4px 0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
-                f'<p style="margin:0;color:#888;font-size:13px;">'
-                f'📂 {category} &nbsp;·&nbsp; 🎨 {color} &nbsp;·&nbsp; '
-                f'<span style="font-weight:700;color:#2e7d32;">{price_str}</span>'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;">'
+                f'<p style="margin:0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
+                f'<span style="font-weight:700;font-size:16px;color:#e53935;">{price_str}</span>'
+                f'</div>'
+                f'<p style="margin:4px 0 0 0;color:#888;font-size:13px;">'
+                f'📂 {category} &nbsp;·&nbsp; 🎨 {color}'
                 f'</p>'
                 f'{pill_line}'
                 f'</div>',
