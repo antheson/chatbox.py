@@ -732,16 +732,39 @@ def get_response(user_input):
             "filters": filters
         }
 
-    more_keywords = ['more', 'show more', 'next', 'more results', 'see more', 'give more', 'load more']
-    is_more_request = any(kw in corrected_input.lower() for kw in more_keywords)
+    # ── PAGINATION DETECTION ──────────────────────────────────────────────────
+    # Only treat as "show more" if the message is PURELY a pagination request
+    # with no new filter words. Prevents "more expensive shoes" or
+    # "show more women shoes" from paginating instead of running a fresh search.
+    _input_stripped = corrected_input.lower().strip()
 
-    if is_more_request and st.session_state.last_filters is not None:
-        st.session_state.result_offset += 5
-        filters = st.session_state.last_filters
+    PURE_MORE_PHRASES = {
+        'more', 'next', 'show more', 'see more', 'give more',
+        'load more', 'more results', 'next page', 'more please',
+        'show me more', 'next results',
+    }
+    is_pure_more = _input_stripped in PURE_MORE_PHRASES
+    if not is_pure_more and re.fullmatch(r'more[.!?]*', _input_stripped):
+        is_pure_more = True
+
+    if is_pure_more:
+        if st.session_state.last_filters is not None and st.session_state.result_offset is not None:
+            st.session_state.result_offset += 5
+            filters = st.session_state.last_filters
+        else:
+            return {
+                "type": "text",
+                "message": "There's no previous search to load more from. Try asking something like 'shoes under 100' first! 😊",
+                "data": None,
+                "filters": {'category': None, 'color': None, 'min_price': None,
+                             'max_price': None, 'intent': 'recommend',
+                             'subcategory': None, 'gender': None}
+            }
     else:
         filters = extract_filters(user_input)
         st.session_state.last_filters = filters
         st.session_state.result_offset = 0
+    # ─────────────────────────────────────────────────────────────────────────
 
     model_intent = "unknown"
     if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price'] and not filters.get('subcategory'):
