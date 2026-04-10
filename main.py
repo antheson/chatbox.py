@@ -681,6 +681,29 @@ def get_response(user_input):
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
 
+    # ── GUARD: reject invalid colors BEFORE name search runs ──────────────────
+    # Without this, "invisible shoes" fuzzy-matches product names and leaks results.
+    INVALID_COLORS = {
+        'rainbow', 'transparent', 'invisible', 'clear', 'holographic',
+        'neon', 'glow', 'glitter', 'sparkle', 'chrome', 'silver',
+        'copper', 'navy', 'teal', 'cyan', 'magenta', 'lavender',
+        'ivory', 'cream', 'tan', 'olive', 'maroon',
+    }
+    text_lower_raw = user_input.lower()
+    for inv_color in INVALID_COLORS:
+        if re.search(rf'\b{re.escape(inv_color)}\b', text_lower_raw):
+            available = 'black, white, blue, red, green, yellow, pink, purple, grey, beige, gold, burgundy, multicolor'
+            dummy_filters = {'category': None, 'color': None, 'min_price': None,
+                             'max_price': None, 'intent': 'recommend',
+                             'subcategory': None, 'gender': None}
+            return {
+                "type": "text",
+                "message": f"Sorry, we don't carry any '{inv_color}' products. 😊\nAvailable colors: {available}.",
+                "data": None,
+                "filters": dummy_filters
+            }
+    # ─────────────────────────────────────────────────────────────────────────
+
     name_results = search_by_product_name(user_input)
     if name_results is not None and not name_results.empty:
         filters = {'category': None, 'color': None, 'min_price': None,
