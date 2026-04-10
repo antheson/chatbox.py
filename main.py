@@ -100,10 +100,6 @@ def load_data():
     df['color'] = df['color'].fillna('Multiple Colors')
     df = df[df['category'] != 'Uncategorized']
 
-    # ── FIX 1: Expanded gender extraction to cover non-Men/Women breadcrumbs ──
-    # Breadcrumbs like "Soccer/Shoes", "Running/Shoes", "Originals/Clothing",
-    # "Essentials/Shoes", "Five Ten/Shoes", "Training/Accessories", "Swim/Shoes"
-    # are genuinely gender-neutral — keep them as 'Unisex'.
     def extract_gender(breadcrumb):
         if pd.isna(breadcrumb):
             return 'Unisex'
@@ -115,10 +111,9 @@ def load_data():
         elif b.startswith('kids'):
             return 'Kids'
         else:
-            return 'Unisex'   # Soccer/, Running/, Originals/, Essentials/, etc.
+            return 'Unisex'
 
     df['gender'] = df['breadcrumbs'].apply(extract_gender)
-
     df['image_url'] = df['images'].apply(
         lambda x: str(x).split('~')[0].strip() if pd.notna(x) else ''
     )
@@ -152,7 +147,6 @@ def correct_category_typo(user_input, categories):
     return ' '.join(corrected_words)
 
 def correct_intent_typo(user_input):
-    # ── Phase 1: phrase-level corrections (multi-word typos) ──
     phrase_corrections = {
         'show more': ['show mroe', 'show moer', 'show mor', 'show mre', 'shwo more',
                       'sohw more', 'show morre', 'shoow more', 'show moore',
@@ -162,22 +156,17 @@ def correct_intent_typo(user_input):
         'load more': ['laod more', 'loda more', 'load mroe'],
     }
     text = user_input.lower().strip()
-    # First pass: exact full-message match (highest priority, no substring risk)
     for canonical, typos in phrase_corrections.items():
         if text in typos:
             return canonical
-    # Second pass: substring replacement — sort longer typos first to avoid
-    # partial matches (e.g. 'show mor' must not eat 'show morre' before it matches).
-    # Skip if canonical is already present in text to avoid double-replacement.
     for canonical, typos in phrase_corrections.items():
         if canonical in text:
             continue
         for typo in sorted(typos, key=len, reverse=True):
             if typo in text:
                 text = text.replace(typo, canonical)
-                break  # only one replacement per canonical per pass
+                break
 
-    # ── Phase 2: word-level corrections ──
     word_corrections = {
         'hello':       ['hllo', 'helo', 'hellp', 'hallow', 'halo'],
         'help':        ['halp', 'hlp', 'hepl', 'helpp'],
@@ -264,7 +253,6 @@ def generate_explanation(row, filters):
     color        = row.get('color', '')
     gender       = row.get('gender', '')
     availability = row.get('availability', '')
-    review_count = row.get('review_count', 0)
     intent       = filters.get('intent', '')
     max_price    = filters.get('max_price')
     min_price    = filters.get('min_price')
@@ -452,7 +440,7 @@ def display_categories():
                 st.write(f"• {product['product_name']}{color_info} - ${product.get('price', 0):.2f}")
 
 # -----------------------------
-# EXTRACT FILTERS  ← ALL FIXES ARE HERE
+# EXTRACT FILTERS
 # -----------------------------
 def extract_filters(text):
     text_lower = text.lower()
@@ -465,24 +453,16 @@ def extract_filters(text):
         'intent': 'recommend'
     }
 
-    # ── FIX 2: Strict price parsing — only parse numbers that are paired with
-    #    a clear price keyword or explicit connector ("between/to/under/over").
-    #    Bare isolated numbers like "100 200 shoes" are now rejected.
-    # ──────────────────────────────────────────────────────────────────────────
-
-    # Pattern 1: "between X and Y" or "X-Y"
     between_match = re.search(r'between\s+(\d+)\s*(?:and|-)\s*(\d+)', text_lower)
     if between_match:
         filters['min_price'] = float(between_match.group(1))
         filters['max_price'] = float(between_match.group(2))
     else:
-        # Pattern 2: "X to Y" (requires the word "to")
         to_match = re.search(r'(\d+)\s+to\s+(\d+)', text_lower)
         if to_match:
             filters['min_price'] = float(to_match.group(1))
             filters['max_price'] = float(to_match.group(2))
         else:
-            # Pattern 3: explicit directional keywords only
             under_match = re.search(r'(?:under|below|less\s+than)\s+(\d+)', text_lower)
             if under_match:
                 filters['max_price'] = float(under_match.group(1))
@@ -491,15 +471,11 @@ def extract_filters(text):
             if above_match:
                 filters['min_price'] = float(above_match.group(1))
 
-            # Pattern 4: "$X" explicit dollar sign (e.g. "shoes $80")
             if filters['min_price'] is None and filters['max_price'] is None:
                 dollar_match = re.search(r'\$(\d+)', text_lower)
                 if dollar_match:
                     filters['max_price'] = float(dollar_match.group(1))
 
-            # ── NO bare-number fallback — "100 200 shoes" should not parse as price ──
-
-    # ── CATEGORY DETECTION ──────────────────────────────────────────────────
     for cat in ALL_CATEGORIES:
         if cat.lower() in text_lower:
             filters['category'] = cat
@@ -512,10 +488,6 @@ def extract_filters(text):
         elif any(word in text_lower for word in ['bag', 'sock', 'hat', 'accessor']):
             filters['category'] = 'Accessories'
 
-    # ── FIX 3: Color detection — treat unknown colors as explicit "not found"
-    #    so the chatbot refuses to show results instead of ignoring the color.
-    # ──────────────────────────────────────────────────────────────────────────
-    # Colors that exist in the dataset
     VALID_COLOR_MAP = {
         'black': 'Black', 'white': 'White', 'blue': 'Blue', 'red': 'Red',
         'green': 'Green', 'yellow': 'Yellow', 'pink': 'Pink', 'purple': 'Purple',
@@ -523,10 +495,9 @@ def extract_filters(text):
         'burgundy': 'Burgundy', 'multicolor': 'Multicolor',
         'multi color': 'Multicolor', 'colorful': 'Multicolor',
         'multi': 'Multicolor',
-        'orange': 'Red',   # closest available
-        'brown': 'Beige',  # closest available
+        'orange': 'Red',
+        'brown': 'Beige',
     }
-    # Colors explicitly NOT in the dataset — always show "not found"
     INVALID_COLORS = {
         'rainbow', 'transparent', 'invisible', 'clear', 'holographic',
         'neon', 'glow', 'glitter', 'sparkle', 'chrome', 'silver',
@@ -535,12 +506,11 @@ def extract_filters(text):
     }
 
     color_found = False
-    # Check invalid colors first (they take priority)
     for inv_color in INVALID_COLORS:
         if re.search(rf'\b{re.escape(inv_color)}\b', text_lower):
-            filters['color'] = None           # no matching color
+            filters['color'] = None
             filters['color_searched'] = inv_color
-            filters['color_not_found'] = True  # explicit not-found flag
+            filters['color_not_found'] = True
             color_found = True
             break
 
@@ -552,7 +522,6 @@ def extract_filters(text):
                 color_found = True
                 break
 
-    # ── SUBCATEGORY DETECTION ──────────────────────────────────────────────
     subcategory_map = {
         'running':    {'user_terms': ['running', 'run', 'jogging', 'jog'],
                        'name_keywords': ['run', 'boost', 'pureboost', 'ultraboost', 'supernova', 'eq21', 'tensor', 'fluidflash']},
@@ -621,7 +590,6 @@ def extract_filters(text):
     else:
         filters['all_matched_subcats'] = None
 
-    # ── FIX 4: Gender detection — added "unisex" keyword explicitly ──────────
     filters['gender'] = None
     if re.search(r'\bunisex\b', text_lower):
         filters['gender'] = 'Unisex'
@@ -632,7 +600,6 @@ def extract_filters(text):
     elif re.search(r'\bkids?\b|\bchildren\b|\bjunior\b', text_lower):
         filters['gender'] = 'Kids'
 
-    # ── INTENT DETECTION ────────────────────────────────────────────────────
     negated_expensive = re.search(r'(less|not|cheaper|more affordable|lower).{0,10}(expensive|costly|premium)', text_lower)
     negated_cheap = re.search(r'(not|less).{0,10}(cheap|budget)', text_lower)
 
@@ -653,64 +620,6 @@ def extract_filters(text):
 
 
 # -----------------------------
-# PRODUCT NAME SEARCH
-# -----------------------------
-def search_by_product_name(user_input):
-    trigger_phrases = [
-        'find ', 'search for ', 'search ', 'show me ', 'look for ',
-        'looking for ', 'do you have ', 'do you sell ', 'i want ',
-        'i need ', 'get me ', 'show ', 'any '
-    ]
-    query = user_input.lower().strip()
-    for phrase in trigger_phrases:
-        if query.startswith(phrase):
-            query = query[len(phrase):].strip()
-
-    if len(query) < 4:
-        return None
-
-    filter_words = {
-        'shoes', 'shoe', 'clothing', 'clothes', 'accessories', 'accessory',
-        'cheap', 'expensive', 'best', 'top', 'budget', 'premium', 'running',
-        'casual', 'slides', 'sandals', 'hoodie', 'jacket', 'pants', 'shorts',
-        'black', 'white', 'blue', 'red', 'green', 'pink', 'grey', 'gray',
-        'men', 'women', 'kids', 'under', 'above', 'between', 'more',
-        'unisex', 'unisec', 'unisecs', 'unisexs', 'unisez', 'unisek',
-        'uniisex', 'unisexe', 'unixex', 'unisax', 'unisix', 'unesex',
-        'rainbow', 'transparent', 'invisible',
-        # pagination phrases — never treat as product names
-        'show', 'next', 'see', 'give', 'load', 'results', 'page', 'please',
-        'show mroe', 'show moer', 'show mor', 'shwo more', 'sohw more',
-        'see mroe', 'see moer', 'nxt', 'nextt', 'nexy', 'nect',
-    }
-    query_words = set(query.split())
-    if query_words.issubset(filter_words):
-        return None
-
-    all_names_lower = df['product_name'].dropna().str.lower().tolist()
-
-    exact_mask = df['product_name'].str.lower().str.contains(re.escape(query), na=False)
-    if exact_mask.any():
-        return df[exact_mask]
-
-    words = [w for w in query.split() if len(w) > 2 and w not in filter_words]
-    if len(words) >= 2:
-        mask = pd.Series([True] * len(df), index=df.index)
-        for w in words:
-            mask = mask & df['product_name'].str.lower().str.contains(re.escape(w), na=False)
-        if mask.any():
-            return df[mask]
-
-    matches = get_close_matches(query, all_names_lower, n=5, cutoff=0.45)
-    if matches:
-        matched_rows = df[df['product_name'].str.lower().isin(matches)]
-        if not matched_rows.empty:
-            return matched_rows
-
-    return None
-
-
-# -----------------------------
 # RESPONSE GENERATION
 # -----------------------------
 def get_response(user_input):
@@ -718,8 +627,6 @@ def get_response(user_input):
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
 
-    # ── GUARD: reject invalid colors BEFORE name search runs ──────────────────
-    # Without this, "invisible shoes" fuzzy-matches product names and leaks results.
     INVALID_COLORS = {
         'rainbow', 'transparent', 'invisible', 'clear', 'holographic',
         'neon', 'glow', 'glitter', 'sparkle', 'chrome', 'silver',
@@ -739,47 +646,8 @@ def get_response(user_input):
                 "data": None,
                 "filters": dummy_filters
             }
-    # ─────────────────────────────────────────────────────────────────────────
-
-    # ── SHORT-CIRCUIT: if corrected input is a pagination phrase, skip name search ──
-    _pre_check = corrected_input.lower().strip()
-    _PURE_MORE_EARLY = {
-        'more', 'next', 'show more', 'see more', 'give more',
-        'load more', 'more results', 'next page', 'more please',
-        'show me more', 'next results',
-    }
-    if _pre_check in _PURE_MORE_EARLY or re.fullmatch(r'more[.!?]*', _pre_check):
-        name_results = None
-    else:
-        name_results = search_by_product_name(corrected_input)
-    if name_results is not None and not name_results.empty:
-        filters = {'category': None, 'color': None, 'min_price': None,
-                   'max_price': None, 'intent': 'recommend',
-                   'subcategory': None, 'gender': None}
-        st.session_state.last_filters = filters
-        st.session_state.result_offset = 0
-        count = len(name_results)
-        label = f'"{user_input.strip()}"'
-        msg = (
-            f"Found {count} product{'s' if count > 1 else ''} matching {label} 🔍"
-            if count > 1 else
-            f"Here's the exact product for {label} 🎯"
-        )
-        cols_needed = ['product_name', 'category', 'price', 'color',
-                       'popularity_index', 'review_count', 'gender',
-                       'availability', 'description', 'image_url', 'original_price']
-        st.session_state.last_had_results = True
-        return {
-            "type": "dataframe",
-            "message": msg,
-            "data": name_results[cols_needed].reset_index(drop=True),
-            "filters": filters
-        }
 
     # ── PAGINATION DETECTION ──────────────────────────────────────────────────
-    # Only treat as "show more" if the message is PURELY a pagination request
-    # with no new filter words. Prevents "more expensive shoes" or
-    # "show more women shoes" from paginating instead of running a fresh search.
     _input_stripped = corrected_input.lower().strip()
 
     PURE_MORE_PHRASES = {
@@ -809,7 +677,6 @@ def get_response(user_input):
         st.session_state.last_filters = filters
         st.session_state.last_had_results = False
         st.session_state.result_offset = 0
-    # ─────────────────────────────────────────────────────────────────────────
 
     model_intent = "unknown"
     if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price'] and not filters.get('subcategory'):
@@ -837,7 +704,6 @@ def get_response(user_input):
     offset = st.session_state.result_offset
     result = df.copy()
 
-    # ── FIX 3 (continued): Reject queries with non-existent colors immediately ──
     if filters.get('color_not_found'):
         searched = filters.get('color_searched', 'that color')
         available = 'black, white, blue, red, green, yellow, pink, purple, grey, beige, gold, burgundy, multicolor'
@@ -859,7 +725,6 @@ def get_response(user_input):
     if filters['color']:
         result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
 
-    # ── FIX 4 (continued): Apply unisex gender filter strictly ──────────────
     if filters.get('gender'):
         result = result[result['gender'] == filters['gender']]
 
