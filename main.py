@@ -389,9 +389,21 @@ def get_response(user_input):
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
     
-    # Extract filters FIRST
-    filters = extract_filters(user_input)
-    
+    # -----------------------------
+    # "MORE RESULTS" DETECTION
+    # -----------------------------
+    more_keywords = ['more', 'show more', 'next', 'more results', 'see more', 'give more', 'load more']
+    is_more_request = any(kw in corrected_input.lower() for kw in more_keywords)
+
+    if is_more_request and st.session_state.last_filters is not None:
+        st.session_state.result_offset += 5
+        filters = st.session_state.last_filters
+    else:
+        # Extract filters FIRST
+        filters = extract_filters(user_input)
+        st.session_state.last_filters = filters
+        st.session_state.result_offset = 0
+
     # Only use ML if no filters detected
     model_intent = "unknown"
     if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price']:
@@ -446,15 +458,9 @@ def get_response(user_input):
                 "data": None
             }
     
-    # Extract all filters from the query
-    filters = extract_filters(user_input)
-    
-    # Set limit (default 5, can be changed by user)
+    # Set limit and offset
     limit = 5
-    for word in text_lower.split():
-        if word.isdigit():
-            requested = int(word)
-            limit = min(requested, 5)  # Max 5 products
+    offset = st.session_state.result_offset
     
     # Apply filters to dataframe
     result = df.copy()
@@ -502,27 +508,42 @@ def get_response(user_input):
     
     # Sort based on intent
     if filters['intent'] == 'expensive':
-        result = result[result['price'] > 0].sort_values('price', ascending=False).head(limit)
-        msg = f"Here are the {len(result)} most expensive products"
+        sorted_result = result[result['price'] > 0].sort_values('price', ascending=False)
+        msg = f"Here are the most expensive products"
     elif filters['intent'] == 'cheap':
-        result = result[result['price'] > 0].sort_values('price').head(limit)
-        msg = f"Here are {len(result)} budget-friendly products"
+        sorted_result = result[result['price'] > 0].sort_values('price')
+        msg = f"Here are budget-friendly products"
     elif filters['intent'] == 'best':
-        result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False).head(limit)
-        msg = f"Here are the top {len(result)} highest-rated products"
+        sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
+        msg = f"Here are the highest-rated products"
     elif filters['intent'] == 'price_range':
-        result = result[result['price'] > 0].sort_values('price').head(limit)
+        sorted_result = result[result['price'] > 0].sort_values('price')
         if filters['min_price'] and filters['max_price']:
-            msg = f"Here are {len(result)} products between ${filters['min_price']:.0f} and ${filters['max_price']:.0f}"
+            msg = f"Here are products between ${filters['min_price']:.0f} and ${filters['max_price']:.0f}"
         elif filters['max_price']:
-            msg = f"Here are {len(result)} products under ${filters['max_price']:.0f}"
+            msg = f"Here are products under ${filters['max_price']:.0f}"
         elif filters['min_price']:
-            msg = f"Here are {len(result)} products above ${filters['min_price']:.0f}"
+            msg = f"Here are products above ${filters['min_price']:.0f}"
         else:
-            msg = f"Here are {len(result)} recommended products"
+            msg = f"Here are recommended products"
     else:
-        result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False).head(limit)
-        msg = f"Here are {len(result)} recommended products"
+        sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
+        msg = f"Here are recommended products"
+
+    # Slice with offset
+    page_result = sorted_result.iloc[offset:offset + limit]
+
+    if page_result.empty:
+        st.session_state.result_offset = max(0, offset - limit)
+        return {
+            "type": "text",
+            "message": "No more results to show! Try a different search 😊",
+            "data": None
+        }
+
+    total_shown = offset + len(page_result)
+    total_available = len(sorted_result)
+    msg += f" (showing {offset + 1}–{total_shown} of {total_available})"
     
     # Add color to message
     if filters['color']:
@@ -532,12 +553,15 @@ def get_response(user_input):
     if filters['category']:
         msg += f" in {filters['category']}"
     
-    msg += " 🛍️"
+    if total_shown < total_available:
+        msg += " 🛍️ — say **'more'** to see more!"
+    else:
+        msg += " 🛍️ — that's all the results!"
     
     return {
         "type": "dataframe",
         "message": msg,
-        "data": result[['product_name', 'category', 'price', 'color', 'popularity_index']]
+        "data": page_result[['product_name', 'category', 'price', 'color', 'popularity_index']]
     }
 
 # -----------------------------
@@ -545,6 +569,10 @@ def get_response(user_input):
 # -----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "last_filters" not in st.session_state:
+    st.session_state.last_filters = None
+if "result_offset" not in st.session_state:
+    st.session_state.result_offset = 0
 
 # Display chat history
 chat_container = st.container()
@@ -576,6 +604,8 @@ with chat_container:
 st.markdown('<div class="fixed-bottom">', unsafe_allow_html=True)
 if st.button("🗑️ Clear Chat", key="clear_chat_bottom"):
     st.session_state.messages = []
+    st.session_state.last_filters = None
+    st.session_state.result_offset = 0
     st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
