@@ -1180,17 +1180,19 @@ def new_conversation():
     """Save current, then start fresh."""
     save_current_conv()
     cid = str(uuid.uuid4())[:8]
-    now = datetime.datetime.now().strftime("%b %d, %H:%M")
+    tz_myt = datetime.timezone(datetime.timedelta(hours=8))
+    now = datetime.datetime.now(tz=tz_myt).strftime("%b %d, %H:%M")
     st.session_state.all_conversations.append({
         "id":       cid,
         "title":    f"Chat {now}",
         "messages": []
     })
-    st.session_state.active_conv_id = cid
-    st.session_state.messages       = []
-    st.session_state.last_filters   = None
-    st.session_state.result_offset  = 0
+    st.session_state.active_conv_id   = cid
+    st.session_state.messages         = []
+    st.session_state.last_filters     = None
+    st.session_state.result_offset    = 0
     st.session_state.selected_product = None
+    st.session_state.welcomed         = False
 
 def load_conversation(cid):
     """Switch to an existing conversation."""
