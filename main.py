@@ -1,4 +1,3 @@
-
 import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import CountVectorizer
@@ -29,6 +28,27 @@ st.markdown("""
     section[data-testid="stSidebar"] .stButton button:hover {
         background-color: #f0f4ff;
         color: #1a237e;
+    }
+
+    /* Smart Explanation box */
+    .smart-explanation {
+        background: #f0faf4;
+        border: 1px solid #c8e6c9;
+        border-radius: 8px;
+        padding: 8px 14px;
+        margin-top: 6px;
+        margin-bottom: 4px;
+        font-size: 13px;
+    }
+    .smart-explanation .exp-title {
+        font-weight: 600;
+        color: #2e7d32;
+        margin-bottom: 4px;
+        font-size: 13px;
+    }
+    .smart-explanation .exp-reason {
+        color: #1b5e20;
+        line-height: 1.7;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -231,6 +251,131 @@ def show_examples():
 """)
 
 # -----------------------------
+# ✨ SMART EXPLANATION GENERATOR
+# -----------------------------
+def generate_explanation(row, filters):
+    """
+    Generate a list of human-readable reasons why this product
+    was recommended, based on the active filters and product data.
+    Returns a list of (emoji, reason_text) tuples.
+    """
+    reasons = []
+
+    price       = row.get('price', 0)
+    orig_price  = row.get('original_price', 0)
+    rating      = row.get('popularity_index', 0)
+    color       = row.get('color', '')
+    category    = row.get('category', '')
+    gender      = row.get('gender', '')
+    availability = row.get('availability', '')
+    review_count = row.get('review_count', 0)
+
+    # ── Budget / price reasons ──────────────────────────────────────────
+    max_price = filters.get('max_price')
+    min_price = filters.get('min_price')
+
+    if max_price and price and price <= max_price:
+        reasons.append(("✔", f"Within your budget (${price:.0f} ≤ ${max_price:.0f})"))
+    if min_price and max_price and price:
+        reasons.append(("✔", f"Price fits your range (${min_price:.0f}–${max_price:.0f})"))
+    elif min_price and not max_price and price and price >= min_price:
+        reasons.append(("✔", f"Priced above ${min_price:.0f} as requested"))
+
+    # Discount badge
+    try:
+        orig = float(orig_price) if orig_price else 0
+        cur  = float(price) if price else 0
+        if orig > 0 and cur > 0 and orig > cur:
+            pct = round((orig - cur) / orig * 100)
+            if pct >= 5:
+                reasons.append(("✔", f"On sale — {pct}% off original price (${orig:.0f} → ${cur:.0f})"))
+    except Exception:
+        pass
+
+    # ── Rating reason ───────────────────────────────────────────────────
+    intent = filters.get('intent', '')
+    try:
+        r = float(rating)
+        if r >= 4.8:
+            reasons.append(("✔", f"Exceptionally rated ({r}/5 ⭐)"))
+        elif r >= 4.5:
+            reasons.append(("✔", f"Highly rated by customers ({r}/5 ⭐)"))
+        elif r >= 4.0:
+            reasons.append(("✔", f"Well rated ({r}/5 ⭐)"))
+        
+        if intent == 'best' and r >= 4.5:
+            reasons.append(("✔", "Among the highest-rated in its category"))
+    except Exception:
+        pass
+
+    # Review count
+    try:
+        rc = float(str(review_count).replace(',', '')) if review_count else 0
+        if rc >= 100:
+            reasons.append(("✔", f"Popular choice — {int(rc):,} customer reviews"))
+        elif rc >= 20:
+            reasons.append(("✔", f"Reviewed by {int(rc)} customers"))
+    except Exception:
+        pass
+
+    # ── Color reason ────────────────────────────────────────────────────
+    filter_color = filters.get('color')
+    if filter_color and color and filter_color.lower() in color.lower():
+        reasons.append(("✔", f"Matches your preferred color ({color})"))
+
+    # ── Category reason ─────────────────────────────────────────────────
+    filter_category = filters.get('category')
+    if filter_category and category and filter_category.lower() in category.lower():
+        reasons.append(("✔", f"In the {category} category you searched for"))
+
+    # ── Subcategory reason ──────────────────────────────────────────────
+    subcat = filters.get('subcategory')
+    if subcat:
+        reasons.append(("✔", f"Matches your style preference: {subcat}"))
+
+    # ── Gender reason ───────────────────────────────────────────────────
+    filter_gender = filters.get('gender')
+    if filter_gender and gender == filter_gender:
+        reasons.append(("✔", f"Designed for {gender}"))
+
+    # ── Availability ────────────────────────────────────────────────────
+    if availability == 'InStock':
+        reasons.append(("✔", "Currently in stock and ready to ship"))
+
+    # ── Price intent reasons ─────────────────────────────────────────────
+    if intent == 'cheap' and price:
+        reasons.append(("✔", f"One of the most affordable options (${price:.0f})"))
+    elif intent == 'expensive' and price:
+        reasons.append(("✔", f"Premium product at ${price:.0f}"))
+
+    # ── Fallback if no reasons generated ────────────────────────────────
+    if not reasons:
+        reasons.append(("✔", f"Recommended based on your search"))
+        if rating:
+            try:
+                reasons.append(("✔", f"Rated {float(rating)}/5 ⭐"))
+            except Exception:
+                pass
+
+    return reasons
+
+
+def render_explanation(reasons):
+    """Render the Smart Explanation box as HTML."""
+    reason_lines = "".join(
+        f'<div class="exp-reason">{emoji} {text}</div>'
+        for emoji, text in reasons
+    )
+    html = f"""
+    <div class="smart-explanation">
+        <div class="exp-title">💡 Recommended because:</div>
+        {reason_lines}
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# -----------------------------
 # DISPLAY PRODUCT DETAIL
 # -----------------------------
 def display_product_detail(row):
@@ -276,9 +421,9 @@ def display_product_detail(row):
         st.rerun()
 
 # -----------------------------
-# DISPLAY PRODUCTS (CLICKABLE CARDS)
+# DISPLAY PRODUCTS (CLICKABLE CARDS) — with Smart Explanation
 # -----------------------------
-def display_products(df_result, label="Recommended Products", card_key_prefix="card"):
+def display_products(df_result, label="Recommended Products", card_key_prefix="card", filters=None):
     if df_result.empty:
         st.warning("No products found.")
         return
@@ -312,6 +457,13 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
             if st.button("View →", key=f"{card_key_prefix}_{i}_{idx}"):
                 st.session_state.selected_product = row.to_dict()
                 st.rerun()
+
+        # ── ✨ SMART EXPLANATION ─────────────────────────────────────────
+        if filters is not None:
+            reasons = generate_explanation(row.to_dict(), filters)
+            render_explanation(reasons)
+        # ────────────────────────────────────────────────────────────────
+
         st.markdown("<div style='margin-bottom:6px'></div>", unsafe_allow_html=True)
 
 # -----------------------------
@@ -645,14 +797,16 @@ def get_response(user_input):
         return {
             "type": "categories",
             "message": "Here are all the product categories available in our store! 🛍️",
-            "data": None
+            "data": None,
+            "filters": filters
         }
     
     if model_intent == "greeting":
         return {
             "type": "text",
             "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
-            "data": None
+            "data": None,
+            "filters": filters
         }
     
     # If user clearly asking for products → skip greeting
@@ -662,7 +816,8 @@ def get_response(user_input):
             return {
                 "type": "text",
                 "message": "Hi there! 👋 I'm your shopping assistant.\n\nYou can ask me to recommend products based on price, category, color, or rating!",
-                "data": None
+                "data": None,
+                "filters": filters
             }
     
         if model_intent == "thanks":
@@ -674,14 +829,16 @@ def get_response(user_input):
                     "My pleasure! 🛍️",
                     "Anytime! 🙌"
                 ]),
-                "data": None
+                "data": None,
+                "filters": filters
             }
     
         if model_intent == "help":
             return {
                 "type": "help",
                 "message": "Here are some things you can ask me 😊",
-                "data": None
+                "data": None,
+                "filters": filters
             }
     
     # Set limit and offset
@@ -698,14 +855,14 @@ def get_response(user_input):
         result = result[result['category'].str.contains(filters['category'], case=False, na=False)]
 
     # Apply color / gender / price BEFORE subcategory splitting
-    # so multi-combo frames all inherit these filters correctly
     if filters.get('color_searched') and filters['color'] is None:
         searched = filters['color_searched']
         available = 'black, white, blue, red, green, yellow, pink, purple, grey, beige, gold, burgundy, multicolor'
         return {
             "type": "text",
             "message": f"Sorry, we don't have any '{searched}' products. 😊 Available colors: {available}.",
-            "data": None
+            "data": None,
+            "filters": filters
         }
     if filters['color']:
         result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
@@ -734,7 +891,6 @@ def get_response(user_input):
     all_subcats = filters.get('all_matched_subcats')
 
     if all_subcats and len(all_subcats) > 1:
-        # Multi-combo: each frame now inherits color/gender/price already filtered above
         import random
         frames = []
         subcat_names = []
@@ -748,16 +904,13 @@ def get_response(user_input):
             import random
             limit = 5
             n = len(frames)
-            # Distribute 5 slots as evenly as possible across all subcats
             base = limit // n
             remainder = limit % n
             counts = [base + (1 if i < remainder else 0) for i in range(n)]
-            # Randomly shuffle each frame then take its allocated count
             parts = []
             for frame, count in zip(frames, counts):
                 shuffled = frame.sample(frac=1, random_state=None).reset_index(drop=True)
                 parts.append(shuffled.head(count))
-            # Interleave: zip rows from each part alternately so they mix visually
             interleaved = []
             max_len = max(len(p) for p in parts)
             for i in range(max_len):
@@ -766,8 +919,7 @@ def get_response(user_input):
                         interleaved.append(p.iloc[i])
             result = pd.DataFrame(interleaved).drop_duplicates().reset_index(drop=True)
             filters['multi_subcat_note'] = f"Showing a mix of: {' + '.join(subcat_names)} 🎲"
-            filters['multi_subcat_limit_applied'] = True  # skip re-slicing later
-        # (if frames empty, result stays as full df)
+            filters['multi_subcat_limit_applied'] = True
 
     elif filters.get('subcategory') and filters.get('subcategory_name_keywords'):
         result = apply_single_subcat(result, filters['subcategory_name_keywords'],
@@ -775,7 +927,6 @@ def get_response(user_input):
 
     # Check if we have results
     if result.empty:
-        # Build helpful message
         conditions = []
         if filters['color']:
             conditions.append(f"color '{filters['color']}'")
@@ -798,10 +949,11 @@ def get_response(user_input):
         return {
             "type": "text",
             "message": msg,
-            "data": None
+            "data": None,
+            "filters": filters
         }
     
-    # Sort based on intent — for multi-combo, keep random shuffle order
+    # Sort based on intent
     is_multi_combo = bool(filters.get('all_matched_subcats') and len(filters['all_matched_subcats']) > 1)
 
     if filters['intent'] == 'expensive':
@@ -825,16 +977,15 @@ def get_response(user_input):
             msg = f"Here are recommended products"
     else:
         if is_multi_combo:
-            # Keep the random shuffle — don't re-sort
             sorted_result = result
             msg = f"Here's a random mix of products"
         else:
             sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
             msg = f"Here are recommended products"
 
-    # Slice with offset — for multi-combo the result is already sized
+    # Slice with offset
     if filters.get('multi_subcat_limit_applied') and offset == 0:
-        page_result = result  # already interleaved to correct size
+        page_result = result
     else:
         page_result = sorted_result.iloc[offset:offset + limit]
 
@@ -843,14 +994,14 @@ def get_response(user_input):
         return {
             "type": "text",
             "message": "No more results to show! Try a different search 😊",
-            "data": None
+            "data": None,
+            "filters": filters
         }
 
     total_shown = offset + len(page_result)
     total_available = len(sorted_result)
     msg += f" (showing {offset + 1}–{total_shown} of {total_available})"
     
-    # Add subcategory / color / category to message
     if filters.get('subcategory'):
         msg += f" in {filters['subcategory']}"
     if filters['color']:
@@ -871,7 +1022,8 @@ def get_response(user_input):
         "message": msg,
         "data": page_result[['product_name', 'category', 'price', 'color',
                                'popularity_index', 'review_count', 'gender',
-                               'availability', 'description', 'image_url', 'original_price']]
+                               'availability', 'description', 'image_url', 'original_price']],
+        "filters": filters   # ← pass filters through so display_products can use them
     }
 
 # -----------------------------
@@ -880,7 +1032,7 @@ def get_response(user_input):
 
 # ── Session state ──
 if "all_conversations" not in st.session_state:
-    st.session_state.all_conversations = []   # list of {id, title, messages}
+    st.session_state.all_conversations = []
 if "active_conv_id" not in st.session_state:
     st.session_state.active_conv_id = None
 if "messages" not in st.session_state:
@@ -958,7 +1110,6 @@ with st.sidebar:
 
     st.markdown("---")
     convs = st.session_state.all_conversations
-    # Show newest first
     for conv in reversed(convs):
         title = auto_title(conv["messages"]) if conv["messages"] else conv["title"]
         is_active = conv["id"] == st.session_state.active_conv_id
@@ -974,7 +1125,6 @@ with st.sidebar:
             st.session_state.all_conversations = [
                 c for c in st.session_state.all_conversations if c["id"] != cid
             ]
-            # Switch to last remaining
             if st.session_state.all_conversations:
                 load_conversation(st.session_state.all_conversations[-1]["id"])
             else:
@@ -1019,8 +1169,9 @@ with chat_container:
             content = msg["content"]
             if isinstance(content, dict):
                 st.write(content["message"])
-                data_value   = content["data"]
+                data_value    = content["data"]
                 response_type = content.get("type", "")
+                saved_filters = content.get("filters", None)   # ← retrieve saved filters
                 if response_type == "categories":
                     display_categories()
                 elif response_type == "help":
@@ -1029,8 +1180,12 @@ with chat_container:
                     if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                         show_examples()
                     elif isinstance(data_value, pd.DataFrame):
-                        display_products(data_value, label="Top Recommendations",
-                                         card_key_prefix=f"hist_{msg_idx}")
+                        display_products(
+                            data_value,
+                            label="Top Recommendations",
+                            card_key_prefix=f"hist_{msg_idx}",
+                            filters=saved_filters   # ← pass filters
+                        )
             else:
                 st.write(content)
 
@@ -1049,6 +1204,7 @@ if user_input:
             st.write(response["message"])
             data_value    = response["data"]
             response_type = response.get("type", "")
+            response_filters = response.get("filters", None)   # ← get filters from response
             if response_type == "categories":
                 display_categories()
             elif response_type == "help":
@@ -1057,8 +1213,12 @@ if user_input:
                 if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                     show_examples()
                 elif isinstance(data_value, pd.DataFrame):
-                    display_products(data_value, label="Top Recommendations",
-                                     card_key_prefix=f"new_{len(st.session_state.messages)}")
+                    display_products(
+                        data_value,
+                        label="Top Recommendations",
+                        card_key_prefix=f"new_{len(st.session_state.messages)}",
+                        filters=response_filters   # ← pass filters
+                    )
             st.session_state.messages.append({"role": "assistant", "content": response})
         else:
             st.write(str(response))
