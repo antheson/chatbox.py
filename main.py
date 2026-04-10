@@ -439,15 +439,88 @@ def extract_filters(text):
             'user_terms': ['hiking', 'hike', 'trail', 'outdoor', 'trekking'],
             'name_keywords': ['hike', 'trail', 'outdoor', 'kestrel']
         },
+        # ---- CLOTHING SUBCATEGORIES ----
+        'hoodie': {
+            'user_terms': ['hoodie', 'hoodies', 'hoddie', 'hoody', 'zip up', 'zip-up'],
+            'name_keywords': ['hoodie']
+        },
+        'tee': {
+            'user_terms': ['tee', 'tees', 't-shirt', 'tshirt', 't shirt', 'shirt', 'polo'],
+            'name_keywords': ['tee', 'polo']
+        },
+        'sweatshirt': {
+            'user_terms': ['sweatshirt', 'sweatshirts', 'sweater', 'crewneck', 'crew neck'],
+            'name_keywords': ['sweatshirt']
+        },
+        'jacket': {
+            'user_terms': ['jacket', 'jackets', 'windbreaker', 'wind breaker'],
+            'name_keywords': ['jacket', 'windbreaker']
+        },
+        'pants': {
+            'user_terms': ['pants', 'trousers', 'joggers', 'track pants', 'trackpants'],
+            'name_keywords': ['pants']
+        },
+        'shorts': {
+            'user_terms': ['shorts', 'short'],
+            'name_keywords': ['shorts']
+        },
+        'tights': {
+            'user_terms': ['tights', 'leggings', 'leggins', 'tight'],
+            'name_keywords': ['tights']
+        },
+        'dress': {
+            'user_terms': ['dress', 'dresses'],
+            'name_keywords': ['dress']
+        },
+        'tank top': {
+            'user_terms': ['tank top', 'tank', 'crop top', 'tanktop'],
+            'name_keywords': ['tank top', 'crop top']
+        },
+        'jersey': {
+            'user_terms': ['jersey', 'jerseys', 'kit'],
+            'name_keywords': ['jersey']
+        },
+        'tracksuit': {
+            'user_terms': ['tracksuit', 'track suit', 'tracksuits', 'sst'],
+            'name_keywords': ['track suit', 'sst set']
+        },
+        'swimwear': {
+            'user_terms': ['swimwear', 'swimsuit', 'swim shorts', 'swimming'],
+            'name_keywords': ['swimsuit', 'swim shorts']
+        },
+    }
+
+    # Clothing subcategories - used to auto-set category to Clothing
+    clothing_subcats = {
+        'hoodie', 'tee', 'sweatshirt', 'jacket', 'pants', 'shorts',
+        'tights', 'dress', 'tank top', 'jersey', 'tracksuit', 'swimwear'
     }
 
     filters['subcategory'] = None
     filters['subcategory_name_keywords'] = None
+    filters['subcategory_category'] = None   # which main category this subcat belongs to
+
+    # Detect ALL matching subcategories (for multi-category combos)
+    matched_subcats = []
     for subcat, mapping in subcategory_map.items():
         if any(kw in text_lower for kw in mapping['user_terms']):
-            filters['subcategory'] = subcat
-            filters['subcategory_name_keywords'] = mapping['name_keywords']
-            break
+            cat = 'Clothing' if subcat in clothing_subcats else 'Shoes'
+            matched_subcats.append((subcat, mapping['name_keywords'], cat))
+
+    if len(matched_subcats) == 1:
+        filters['subcategory'] = matched_subcats[0][0]
+        filters['subcategory_name_keywords'] = matched_subcats[0][1]
+        filters['subcategory_category'] = matched_subcats[0][2]
+    elif len(matched_subcats) > 1:
+        # Multi-category combo: randomly pick one
+        import random
+        chosen = random.choice(matched_subcats)
+        filters['subcategory'] = chosen[0]
+        filters['subcategory_name_keywords'] = chosen[1]
+        filters['subcategory_category'] = chosen[2]
+        filters['multi_subcat_note'] = f"Showing results for '{chosen[0]}' (randomly picked from your request!)"
+    elif not matched_subcats:
+        pass  # no subcategory detected
 
     # -----------------------------
     # INTENT DETECTION
@@ -569,16 +642,13 @@ def get_response(user_input):
         pattern = '|'.join(re.escape(kw) for kw in kws)
         subcategory_result = result[result['product_name'].str.contains(pattern, case=False, na=False)]
 
-        # If no results with strict name match, fall back to just category filter
         if not subcategory_result.empty:
             result = subcategory_result
-        else:
-            st.session_state._subcategory_no_results = filters['subcategory']
 
-        # Auto-restrict to Shoes for shoe-type subcategories
-        shoe_subcats = {'running', 'hiking', 'basketball', 'soccer', 'golf', 'training', 'slides', 'climbing', 'cycling', 'casual'}
-        if filters['subcategory'] in shoe_subcats and not filters['category']:
-            result = result[result['category'].str.contains('Shoes', case=False, na=False)]
+        # Auto-restrict to correct main category based on subcat type
+        subcat_category = filters.get('subcategory_category')
+        if subcat_category and not filters['category']:
+            result = result[result['category'].str.contains(subcat_category, case=False, na=False)]
 
     if filters.get('color_searched') and filters['color'] is None:
         # Color was searched but doesn't exist in dataset (e.g. "rainbow")
@@ -677,6 +747,9 @@ def get_response(user_input):
         msg += " 🛍️ — say **'more'** to see more!"
     else:
         msg += " 🛍️ — that's all the results!"
+
+    if filters.get('multi_subcat_note'):
+        msg += f"\n\n💡 _{filters['multi_subcat_note']}_"
     
     return {
         "type": "dataframe",
