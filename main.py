@@ -335,7 +335,36 @@ def extract_filters(text):
     
     
     # -----------------------------
-    # INTENT DETECTION (MOVE OUTSIDE)
+    # CATEGORY DETECTION
+    # -----------------------------
+    for cat in ALL_CATEGORIES:
+        if cat.lower() in text_lower:
+            filters['category'] = cat
+            break
+
+    if not filters['category']:
+        if any(word in text_lower for word in ['shoe', 'shoes', 'sneaker', 'trainer']):
+            filters['category'] = 'Shoes'
+        elif any(word in text_lower for word in ['cloth', 'clothing', 'shirt', 'pants', 'jacket', 'hoodie']):
+            filters['category'] = 'Clothing'
+        elif any(word in text_lower for word in ['bag', 'sock', 'hat', 'accessor']):
+            filters['category'] = 'Accessories'
+
+    # -----------------------------
+    # COLOR DETECTION
+    # -----------------------------
+    color_keywords = [
+        'black', 'white', 'blue', 'red', 'green', 'yellow',
+        'pink', 'purple', 'grey', 'gray', 'beige', 'gold', 'orange', 'brown'
+    ]
+
+    for color in color_keywords:
+        if re.search(rf'\b{color}\b', text_lower):
+            filters['color'] = color
+            break
+
+    # -----------------------------
+    # INTENT DETECTION
     # -----------------------------
     if 'cheap' in text_lower:
         filters['intent'] = 'cheap'
@@ -345,39 +374,8 @@ def extract_filters(text):
         filters['intent'] = 'best'
     elif filters['min_price'] or filters['max_price']:
         filters['intent'] = 'price_range'
-    
-    
+
     return filters
-
-
-    # -----------------------------
-    # CATEGORY DETECTION (IMPROVED)
-    # -----------------------------
-    for cat in ALL_CATEGORIES:
-        if cat.lower() in text_lower:
-            filters['category'] = cat
-            break
-
-    if not filters['category']:
-        if any(word in text_lower for word in ['shoe', 'sneaker', 'trainer']):
-            filters['category'] = 'shoes'
-        elif any(word in text_lower for word in ['cloth', 'shirt', 'pants', 'jacket', 'hoodie']):
-            filters['category'] = 'clothing'
-        elif any(word in text_lower for word in ['bag', 'sock', 'hat', 'accessor']):
-            filters['category'] = 'accessories'
-
-    # -----------------------------
-    # COLOR DETECTION (IMPROVED)
-    # -----------------------------
-    color_keywords = [
-        'black','white','blue','red','green','yellow',
-        'pink','purple','grey','gray','beige','gold'
-    ]
-
-    for color in color_keywords:
-        if color in text_lower:
-            filters['color'] = color
-            break
 
 
 # -----------------------------
