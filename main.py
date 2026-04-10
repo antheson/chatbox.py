@@ -364,13 +364,78 @@ def extract_filters(text):
             break
 
     # -----------------------------
+    # SUBCATEGORY / PRODUCT TYPE DETECTION
+    # Based on actual dataset product names
+    # -----------------------------
+
+    # Map user terms -> product name keywords to search
+    subcategory_map = {
+        'running':   {
+            'user_terms': ['running', 'run', 'jogging', 'jog'],
+            'name_keywords': ['run', 'boost', 'pureboost', 'ultraboost', 'supernova', 'eq21', 'tensor', 'fluidflash']
+        },
+        'slides': {
+            'user_terms': ['slides', 'slide', 'sandal', 'sandals', 'flip flop', 'flip-flop', 'slippers'],
+            'name_keywords': ['slide', 'sandal', 'flip', 'mule', 'adilette']
+        },
+        'soccer': {
+            'user_terms': ['soccer', 'football', 'cleat', 'cleats', 'turf'],
+            'name_keywords': ['copa', 'predator', 'ghosted', 'cleat', 'turf', 'firm ground']
+        },
+        'golf': {
+            'user_terms': ['golf'],
+            'name_keywords': ['golf']
+        },
+        'climbing': {
+            'user_terms': ['climbing', 'climb', 'boulder'],
+            'name_keywords': ['climbing', 'hiangle', 'five ten']
+        },
+        'cycling': {
+            'user_terms': ['cycling', 'bike', 'mountain bike', 'mtb'],
+            'name_keywords': ['bike', 'kestrel', 'five ten']
+        },
+        'basketball': {
+            'user_terms': ['basketball', 'court'],
+            'name_keywords': ['hoops']
+        },
+        'casual': {
+            'user_terms': ['casual', 'lifestyle', 'everyday', 'classic', 'street'],
+            'name_keywords': ['superstar', 'samba', 'nizza', 'hamburg', 'ozweego', 'ozelia', 'postmove', 'grand court', 'advantage', 'retrorun', 'sambarose', 'bryony']
+        },
+        'training': {
+            'user_terms': ['training', 'gym', 'workout', 'cross training', 'crossfit'],
+            'name_keywords': ['racer', 'swift', 'climacool', 'multix', 'puremotion', 'futurenatural']
+        },
+        'hiking': {
+            'user_terms': ['hiking', 'hike', 'trail', 'outdoor', 'trekking'],
+            'name_keywords': ['hike', 'trail', 'outdoor', 'kestrel']
+        },
+    }
+
+    filters['subcategory'] = None
+    filters['subcategory_name_keywords'] = None
+    for subcat, mapping in subcategory_map.items():
+        if any(kw in text_lower for kw in mapping['user_terms']):
+            filters['subcategory'] = subcat
+            filters['subcategory_name_keywords'] = mapping['name_keywords']
+            break
+
+    # -----------------------------
     # INTENT DETECTION
     # -----------------------------
-    if 'cheap' in text_lower:
+    # Check for negation before expensive ("less expensive", "not expensive", "cheaper than")
+    negated_expensive = re.search(r'(less|not|cheaper|more affordable|lower).{0,10}(expensive|costly|premium)', text_lower)
+    negated_cheap = re.search(r'(not|less).{0,10}(cheap|budget)', text_lower)
+
+    if negated_expensive:
         filters['intent'] = 'cheap'
-    elif 'expensive' in text_lower or 'premium' in text_lower:
+    elif negated_cheap:
+        filters['intent'] = 'recommend'
+    elif 'cheap' in text_lower or 'budget' in text_lower or 'affordable' in text_lower:
+        filters['intent'] = 'cheap'
+    elif 'expensive' in text_lower or 'premium' in text_lower or 'luxury' in text_lower:
         filters['intent'] = 'expensive'
-    elif 'best' in text_lower or 'top' in text_lower:
+    elif 'best' in text_lower or 'top' in text_lower or 'highest rated' in text_lower:
         filters['intent'] = 'best'
     elif filters['min_price'] or filters['max_price']:
         filters['intent'] = 'price_range'
@@ -464,17 +529,34 @@ def get_response(user_input):
     result = df.copy()
     
     # -----------------------------
-    # APPLY FILTERS (FIXED)
+    # APPLY FILTERS
     # -----------------------------
     if filters['category']:
         result = result[result['category'].str.contains(filters['category'], case=False, na=False)]
-    
+
+    # Subcategory: filter by product name using accurate dataset keywords
+    if filters.get('subcategory') and filters.get('subcategory_name_keywords'):
+        kws = filters['subcategory_name_keywords']
+        pattern = '|'.join(re.escape(kw) for kw in kws)
+        subcategory_result = result[result['product_name'].str.contains(pattern, case=False, na=False)]
+
+        # If no results with strict name match, fall back to just category filter
+        if not subcategory_result.empty:
+            result = subcategory_result
+        else:
+            st.session_state._subcategory_no_results = filters['subcategory']
+
+        # Auto-restrict to Shoes for shoe-type subcategories
+        shoe_subcats = {'running', 'hiking', 'basketball', 'soccer', 'golf', 'training', 'slides', 'climbing', 'cycling', 'casual'}
+        if filters['subcategory'] in shoe_subcats and not filters['category']:
+            result = result[result['category'].str.contains('Shoes', case=False, na=False)]
+
     if filters['color']:
         result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
-    
+
     if filters['min_price']:
         result = result[result['price'] >= filters['min_price']]
-    
+
     if filters['max_price']:
         result = result[result['price'] <= filters['max_price']]
     
@@ -493,7 +575,9 @@ def get_response(user_input):
         elif filters['min_price']:
             conditions.append(f"price above ${filters['min_price']:.0f}")
         
-        if conditions:
+        if filters.get('subcategory'):
+            msg = f"I couldn't find any {filters['subcategory']} products. Try: running shoes, slides, soccer, golf, casual, or training! 😊"
+        elif conditions:
             msg = f"I couldn't find products with {', '.join(conditions)}. Try different filters! 😊"
         else:
             msg = "I couldn't find matching products. Try asking for 'shoes under 100' or 'white clothing'! 😊"
@@ -543,14 +627,14 @@ def get_response(user_input):
     total_available = len(sorted_result)
     msg += f" (showing {offset + 1}–{total_shown} of {total_available})"
     
-    # Add color to message
+    # Add subcategory / color / category to message
+    if filters.get('subcategory'):
+        msg += f" in {filters['subcategory']}"
     if filters['color']:
-        msg += f" in {filters['color']}"
-    
-    # Add category to message
-    if filters['category']:
+        msg += f" · {filters['color']}"
+    if filters['category'] and not filters.get('subcategory'):
         msg += f" in {filters['category']}"
-    
+
     if total_shown < total_available:
         msg += " 🛍️ — say **'more'** to see more!"
     else:
