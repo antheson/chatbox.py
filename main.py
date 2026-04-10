@@ -725,6 +725,7 @@ def get_response(user_input):
         cols_needed = ['product_name', 'category', 'price', 'color',
                        'popularity_index', 'review_count', 'gender',
                        'availability', 'description', 'image_url', 'original_price']
+        st.session_state.last_had_results = True
         return {
             "type": "dataframe",
             "message": msg,
@@ -748,13 +749,13 @@ def get_response(user_input):
         is_pure_more = True
 
     if is_pure_more:
-        if st.session_state.last_filters is not None and st.session_state.result_offset is not None:
+        if st.session_state.last_had_results:
             st.session_state.result_offset += 5
             filters = st.session_state.last_filters
         else:
             return {
                 "type": "text",
-                "message": "There's no previous search to load more from. Try asking something like 'shoes under 100' first! 😊",
+                "message": "There's nothing to show more of yet. Search for some products first — try 'shoes under 100' or 'best running shoes'! 😊",
                 "data": None,
                 "filters": {'category': None, 'color': None, 'min_price': None,
                              'max_price': None, 'intent': 'recommend',
@@ -763,6 +764,7 @@ def get_response(user_input):
     else:
         filters = extract_filters(user_input)
         st.session_state.last_filters = filters
+        st.session_state.last_had_results = False
         st.session_state.result_offset = 0
     # ─────────────────────────────────────────────────────────────────────────
 
@@ -944,6 +946,7 @@ def get_response(user_input):
     if filters.get('multi_subcat_note'):
         msg += f"\n\n💡 _{filters['multi_subcat_note']}_"
 
+    st.session_state.last_had_results = True
     return {
         "type": "dataframe",
         "message": msg,
@@ -965,6 +968,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_filters" not in st.session_state:
     st.session_state.last_filters = None
+if "last_had_results" not in st.session_state:
+    st.session_state.last_had_results = False
 if "result_offset" not in st.session_state:
     st.session_state.result_offset = 0
 if "selected_product" not in st.session_state:
@@ -994,6 +999,7 @@ def new_conversation():
     st.session_state.active_conv_id   = cid
     st.session_state.messages         = []
     st.session_state.last_filters     = None
+    st.session_state.last_had_results  = False
     st.session_state.result_offset    = 0
     st.session_state.selected_product = None
     st.session_state.welcomed         = False
@@ -1005,6 +1011,7 @@ def load_conversation(cid):
             st.session_state.active_conv_id   = cid
             st.session_state.messages         = list(conv["messages"])
             st.session_state.last_filters     = None
+            st.session_state.last_had_results  = False
             st.session_state.result_offset    = 0
             st.session_state.selected_product = None
             return
