@@ -41,17 +41,6 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* ── Chat input bar ── */
-    .stChatInput textarea {
-        border-radius: 12px !important;
-        border: 1.5px solid #c5cae9 !important;
-        background: #ffffff !important;
-    }
-    .stChatInput textarea:focus {
-        border-color: #3949ab !important;
-        box-shadow: 0 0 0 2px rgba(57,73,171,0.15) !important;
-    }
-
     /* ── Red View → button only ── */
     .view-btn button {
         background-color: #e53935 !important;
