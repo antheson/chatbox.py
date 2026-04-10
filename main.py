@@ -776,7 +776,7 @@ def get_response(user_input):
         st.session_state.result_offset = max(0, offset - limit)
         return {
             "type": "text",
-            "message": "No more results to show! Try a different search 😊",
+            "message": "You've reached the end of the results 👍 Try another search!"
             "data": None
         }
 
