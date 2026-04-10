@@ -1,3 +1,4 @@
+
 import pandas as pd
 import streamlit as st
 from sklearn.feature_extraction.text import CountVectorizer
@@ -8,128 +9,31 @@ import re
 # -----------------------------
 # PAGE SETUP
 # -----------------------------
-st.set_page_config(page_title="ShopAssist AI", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
 
 # Custom CSS to fix button at bottom
 st.markdown("""
 <style>
-    /* ── Global dark background ── */
-    .stApp {
-        background-color: #0d1117;
-        color: #c9d1d9;
-    }
-
-    /* ── Main content area ── */
-    .main .block-container {
-        background-color: #0d1117;
-        padding-top: 1.5rem;
-    }
-
-    /* ── Sidebar ── */
-    section[data-testid="stSidebar"] {
-        background-color: #161b22;
-        border-right: 1px solid #21262d;
-    }
-    section[data-testid="stSidebar"] .stMarkdown p,
-    section[data-testid="stSidebar"] .stMarkdown h2 {
-        color: #8b949e;
-    }
-
-    /* ── Sidebar conversation buttons ── */
+    /* Sidebar conversation list buttons */
     section[data-testid="stSidebar"] .stButton button {
         text-align: left;
-        background-color: #21262d;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        color: #c9d1d9;
+        background-color: transparent;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        color: inherit;
         font-weight: normal;
-        font-size: 13px;
         box-shadow: none;
         padding: 6px 12px;
-        margin-bottom: 3px;
-        transition: all 0.15s;
+        margin-bottom: 2px;
     }
     section[data-testid="stSidebar"] .stButton button:hover {
-        background-color: #0d1117;
-        border-color: #00e5ff;
-        color: #00e5ff;
+        background-color: #f0f4ff;
+        color: #1a237e;
     }
-
-    /* ── New Chat button ── */
-    section[data-testid="stSidebar"] .stButton:first-of-type button {
-        background-color: #00e5ff18;
-        border: 1px solid #00e5ff55;
-        color: #00e5ff;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-    section[data-testid="stSidebar"] .stButton:first-of-type button:hover {
-        background-color: #00e5ff30;
-    }
-
-    /* ── All other buttons ── */
-    .stButton button {
-        background-color: #21262d;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        color: #c9d1d9;
-        transition: all 0.15s;
-    }
-    .stButton button:hover {
-        border-color: #00e5ff;
-        color: #00e5ff;
-        background-color: #0d1117;
-    }
-
-    /* ── Chat messages ── */
-    .stChatMessage {
-        background-color: #161b22 !important;
-        border: 1px solid #21262d !important;
-        border-radius: 10px !important;
-        margin-bottom: 8px !important;
-    }
-
-    /* ── Chat input box ── */
-    .stChatInputContainer {
-        background-color: #161b22 !important;
-        border: 1px solid #30363d !important;
-        border-radius: 10px !important;
-    }
-    .stChatInputContainer textarea {
-        background-color: #161b22 !important;
-        color: #c9d1d9 !important;
-    }
-
-    /* ── Headings ── */
-    h1, h2, h3 { color: #e6edf3; }
-    h3 { font-family: monospace; }
-
-    /* ── Info / warning boxes ── */
-    .stAlert {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        color: #c9d1d9;
-    }
-
-    /* ── Expander ── */
-    .streamlit-expanderHeader {
-        background-color: #161b22;
-        color: #8b949e;
-    }
-
-    /* ── Selectbox / inputs ── */
-    .stSelectbox > div > div {
-        background-color: #21262d;
-        border-color: #30363d;
-        color: #c9d1d9;
-    }
-
-    /* ── Dividers ── */
-    hr { border-color: #21262d; }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='color:#00e5ff;font-family:monospace;letter-spacing:2px;'>⚡ ShopAssist AI</h1>", unsafe_allow_html=True)
+st.title("🛍️ ShopAssist AI - Adidas Recommendation Chatbot")
 
 # -----------------------------
 # LOAD DATASET
@@ -343,7 +247,7 @@ def display_product_detail(row):
     image_url    = row.get('image_url', '')
 
     price_str   = f"${price:.2f}" if price and price > 0 else "N/A"
-    avail_color = "#00e5ff" if availability == "InStock" else "#f85149"
+    avail_color = "#2e7d32" if availability == "InStock" else "#c62828"
     avail_label = "✅ In Stock" if availability == "InStock" else "❌ Out of Stock"
     rating_str  = (f"{'\u2b50' * int(round(float(rating)))}{'\u2606' * (5 - int(round(float(rating))))} ({rating}/5)") if rating and float(rating) > 0 else "No rating"
     reviews_str = f"{int(reviews):,}" if reviews and float(str(reviews).replace(',','')) > 0 else "No reviews"
@@ -389,18 +293,18 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
         price     = row.get('price', 0)
         price_str = f"${price:.2f}" if price and price > 0 else "N/A"
         gender_badge = (
-            f" &nbsp;<span style='background:#00e5ff18;color:#00e5ff;"
-            f"border-radius:4px;padding:1px 6px;font-size:11px;font-family:monospace;'>{gender}</span>"
+            f" &nbsp;<span style='background:#e3f2fd;color:#1565c0;"
+            f"border-radius:4px;padding:1px 6px;font-size:11px;'>{gender}</span>"
         ) if gender and gender != 'Unisex' else ""
 
         col_card, col_btn = st.columns([5, 1])
         with col_card:
             st.markdown(
-                f'<div style="border:1px solid #30363d;border-radius:10px;padding:14px 18px;background:#161b22;">'
-                f'<p style="margin:0 0 4px 0;font-weight:600;font-size:15px;color:#e6edf3;font-family:monospace;">#{i} &nbsp; {name}{gender_badge}</p>'
-                f'<p style="margin:0;color:#8b949e;font-size:13px;">'
+                f'<div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;">'
+                f'<p style="margin:0 0 4px 0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
+                f'<p style="margin:0;color:#888;font-size:13px;">'
                 f'📂 {category} &nbsp;·&nbsp; 🎨 {color} &nbsp;·&nbsp; '
-                f'<span style="font-weight:700;color:#00e5ff;">{price_str}</span>'
+                f'<span style="font-weight:700;color:#2e7d32;">{price_str}</span>'
                 f'</p></div>',
                 unsafe_allow_html=True
             )
@@ -1080,11 +984,11 @@ with st.sidebar:
 # ── Welcome guide ──
 if not st.session_state.welcomed:
     welcome_html = (
-        "<div style='background:#161b22;"
-        "border-radius:14px;padding:22px 26px;margin-bottom:20px;border:1px solid #00e5ff44;'>"
-        "<h3 style='margin:0 0 10px 0;color:#00e5ff;font-family:monospace;'>&#x26A1; Welcome to ShopAssist AI!</h3>"
-        "<p style='margin:0 0 10px 0;color:#8b949e;'>I can help you find Adidas products. Here's what you can ask:</p>"
-        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;color:#c9d1d9;'>"
+        "<div style='background:linear-gradient(135deg,#e3f2fd,#f3e5f5);"
+        "border-radius:14px;padding:22px 26px;margin-bottom:20px;border:1px solid #bbdefb;'>"
+        "<h3 style='margin:0 0 10px 0;'>&#x1F44B; Welcome to ShopAssist AI!</h3>"
+        "<p style='margin:0 0 10px 0;color:#444;'>I can help you find Adidas products. Here's what you can ask:</p>"
+        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;'>"
         "<div>&#x1F45F; <b>Shoes:</b> running shoes, casual shoes, slides, golf shoes</div>"
         "<div>&#x1F455; <b>Clothing:</b> hoodies, tee, jacket, pants, shorts, tights</div>"
         "<div>&#x1F4B0; <b>Price:</b> shoes under 100 &middot; clothing between 30 and 60</div>"
@@ -1092,7 +996,7 @@ if not st.session_state.welcomed:
         "<div>&#x1F464; <b>Gender:</b> women's running shoes &middot; men's hoodie</div>"
         "<div>&#x2B50; <b>Sort:</b> best shoes &middot; cheap clothing &middot; expensive shoes</div>"
         "</div>"
-        "<p style='margin:12px 0 0 0;color:#8b949e;font-size:13px;'>"
+        "<p style='margin:12px 0 0 0;color:#666;font-size:13px;'>"
         "&#x1F4A1; Tip: Click <b>View &#x2192;</b> on any product to see full details. "
         "Say <b>'more'</b> to load more results."
         "</p></div>"
