@@ -88,7 +88,27 @@ def load_data():
     
     # REMOVE UNCATEGORIZED PRODUCTS
     df = df[df['category'] != 'Uncategorized']
-    
+
+    # Extract gender from breadcrumbs (e.g. "Women/Shoes" -> "Women")
+    def extract_gender(breadcrumb):
+        if pd.isna(breadcrumb):
+            return 'Unisex'
+        b = str(breadcrumb).lower()
+        if b.startswith('women'):
+            return 'Women'
+        elif b.startswith('men'):
+            return 'Men'
+        elif b.startswith('kids'):
+            return 'Kids'
+        else:
+            return 'Unisex'
+    df['gender'] = df['breadcrumbs'].apply(extract_gender)
+
+    # Keep first image URL only
+    df['image_url'] = df['images'].apply(
+        lambda x: str(x).split('~')[0].strip() if pd.notna(x) else ''
+    )
+
     return df
 
 df = load_data()
@@ -222,46 +242,88 @@ def show_examples():
 """)
 
 # -----------------------------
-# DISPLAY PRODUCTS (CLEAN MINIMAL CARDS)
+# DISPLAY PRODUCT DETAIL
 # -----------------------------
-def display_products(df_result, label="Recommended Products"):
+def display_product_detail(row):
+    name         = row.get('product_name', 'Unknown')
+    category     = row.get('category', 'N/A')
+    color        = row.get('color', 'N/A')
+    price        = row.get('price', 0)
+    orig_price   = row.get('original_price', 0)
+    rating       = row.get('popularity_index', 0)
+    reviews      = row.get('review_count', 0)
+    gender       = row.get('gender', 'Unisex')
+    availability = row.get('availability', 'N/A')
+    description  = row.get('description', 'No description available.')
+    image_url    = row.get('image_url', '')
+
+    price_str   = f"${price:.2f}" if price and price > 0 else "N/A"
+    avail_color = "#2e7d32" if availability == "InStock" else "#c62828"
+    avail_label = "✅ In Stock" if availability == "InStock" else "❌ Out of Stock"
+    rating_str  = (f"{'\u2b50' * int(round(float(rating)))}{'\u2606' * (5 - int(round(float(rating))))} ({rating}/5)") if rating and float(rating) > 0 else "No rating"
+    reviews_str = f"{int(reviews):,}" if reviews and float(str(reviews).replace(',','')) > 0 else "No reviews"
+
+    col_img, col_info = st.columns([1, 2])
+    with col_img:
+        if image_url:
+            st.image(image_url, use_container_width=True)
+        else:
+            st.markdown("🖼️ *No image available*")
+    with col_info:
+        st.markdown(f"### {name}")
+        st.markdown(f"<span style='color:{avail_color}; font-weight:600;'>{avail_label}</span>", unsafe_allow_html=True)
+        st.markdown(f"**💰 Price:** {price_str}")
+        if orig_price and float(str(orig_price)) > float(str(price)) and float(str(price)) > 0:
+            st.markdown(f"<s style='color:#999'>Original: ${float(orig_price):.2f}</s>", unsafe_allow_html=True)
+        st.markdown(f"**📂 Category:** {category} &nbsp;·&nbsp; **🎨 Color:** {color}")
+        st.markdown(f"**👤 Gender:** {gender} &nbsp;·&nbsp; **⭐ Rating:** {rating_str}")
+        st.markdown(f"**📝 Reviews:** {reviews_str}")
+        st.markdown("---")
+        st.markdown("**📄 Description:**")
+        st.markdown(f"_{description}_")
+
+    if st.button("← Back to results", key="back_btn"):
+        st.session_state.selected_product = None
+        st.rerun()
+
+# -----------------------------
+# DISPLAY PRODUCTS (CLICKABLE CARDS)
+# -----------------------------
+def display_products(df_result, label="Recommended Products", card_key_prefix="card"):
     if df_result.empty:
         st.warning("No products found.")
         return
 
     st.subheader(f"🏆 {label}")
 
-    for i, (_, row) in enumerate(df_result.iterrows(), start=1):
+    for i, (idx, row) in enumerate(df_result.iterrows(), start=1):
         name      = row.get('product_name', 'Unknown')
         category  = row.get('category', 'N/A')
         color     = row.get('color', 'N/A')
+        gender    = row.get('gender', '')
         price     = row.get('price', 0)
         price_str = f"${price:.2f}" if price and price > 0 else "N/A"
+        gender_badge = (
+            f" &nbsp;<span style='background:#e3f2fd;color:#1565c0;"
+            f"border-radius:4px;padding:1px 6px;font-size:11px;'>{gender}</span>"
+        ) if gender and gender != 'Unisex' else ""
 
-        st.markdown(f"""
-        <div style="
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            padding: 14px 18px;
-            margin-bottom: 10px;
-            background-color: #fafafa;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        ">
-            <div style="flex: 1; min-width: 0;">
-                <p style="margin: 0 0 4px 0; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    #{i} &nbsp; {name}
-                </p>
-                <p style="margin: 0; color: #888; font-size: 13px;">
-                    📂 {category} &nbsp;·&nbsp; 🎨 {color}
-                </p>
-            </div>
-            <div style="margin-left: 20px; text-align: right; flex-shrink: 0;">
-                <p style="margin: 0; font-size: 18px; font-weight: 700; color: #2e7d32;">{price_str}</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        col_card, col_btn = st.columns([5, 1])
+        with col_card:
+            st.markdown(
+                f'<div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;">'
+                f'<p style="margin:0 0 4px 0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
+                f'<p style="margin:0;color:#888;font-size:13px;">'
+                f'📂 {category} &nbsp;·&nbsp; 🎨 {color} &nbsp;·&nbsp; '
+                f'<span style="font-weight:700;color:#2e7d32;">{price_str}</span>'
+                f'</p></div>',
+                unsafe_allow_html=True
+            )
+        with col_btn:
+            if st.button("View →", key=f"{card_key_prefix}_{i}_{idx}"):
+                st.session_state.selected_product = row.to_dict()
+                st.rerun()
+        st.markdown("<div style='margin-bottom:6px'></div>", unsafe_allow_html=True)
 
 # -----------------------------
 # DISPLAY CATEGORIES (UI)
@@ -522,6 +584,17 @@ def extract_filters(text):
         filters['all_matched_subcats'] = None
 
     # -----------------------------
+    # GENDER DETECTION
+    # -----------------------------
+    filters['gender'] = None
+    if re.search(r"\bwomen'?s?\b|\bfemale\b|\bladies\b|\bgirl\b|\bgirls\b", text_lower):
+        filters['gender'] = 'Women'
+    elif re.search(r"\bmen'?s?\b|\bmale\b|\bguy\b|\bguys\b|\bboy\b(?!s shoes)\b", text_lower):
+        filters['gender'] = 'Men'
+    elif re.search(r'\bkids?\b|\bchildren\b|\bjunior\b', text_lower):
+        filters['gender'] = 'Kids'
+
+    # -----------------------------
     # INTENT DETECTION
     # -----------------------------
     # Check for negation before expensive ("less expensive", "not expensive", "cheaper than")
@@ -701,6 +774,9 @@ def get_response(user_input):
     if filters['color']:
         result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
 
+    if filters.get('gender'):
+        result = result[result['gender'] == filters['gender']]
+
     if filters['min_price']:
         result = result[result['price'] >= filters['min_price']]
 
@@ -776,7 +852,7 @@ def get_response(user_input):
         st.session_state.result_offset = max(0, offset - limit)
         return {
             "type": "text",
-            "message": "You've reached the end of the results 👍 Try another search!",
+            "message": "No more results to show! Try a different search 😊",
             "data": None
         }
 
@@ -803,7 +879,9 @@ def get_response(user_input):
     return {
         "type": "dataframe",
         "message": msg,
-        "data": page_result[['product_name', 'category', 'price', 'color', 'popularity_index']]
+        "data": page_result[['product_name', 'category', 'price', 'color',
+                               'popularity_index', 'review_count', 'gender',
+                               'availability', 'description', 'image_url', 'original_price']]
     }
 
 # -----------------------------
@@ -815,6 +893,43 @@ if "last_filters" not in st.session_state:
     st.session_state.last_filters = None
 if "result_offset" not in st.session_state:
     st.session_state.result_offset = 0
+if "selected_product" not in st.session_state:
+    st.session_state.selected_product = None
+if "welcomed" not in st.session_state:
+    st.session_state.welcomed = False
+
+# -----------------------------
+# WELCOME GUIDE (shown once on first load)
+# -----------------------------
+if not st.session_state.welcomed:
+    welcome_html = (
+        "<div style='background:linear-gradient(135deg,#e3f2fd,#f3e5f5);"
+        "border-radius:14px;padding:22px 26px;margin-bottom:20px;border:1px solid #bbdefb;'>"
+        "<h3 style='margin:0 0 10px 0;'>&#x1F44B; Welcome to ShopAssist AI!</h3>"
+        "<p style='margin:0 0 10px 0;color:#444;'>I can help you find Adidas products. Here's what you can ask:</p>"
+        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;'>"
+        "<div>&#x1F45F; <b>Shoes:</b> running shoes, casual shoes, slides, golf shoes</div>"
+        "<div>&#x1F455; <b>Clothing:</b> hoodies, tee, jacket, pants, shorts, tights</div>"
+        "<div>&#x1F4B0; <b>Price:</b> shoes under 100 &middot; clothing between 30 and 60</div>"
+        "<div>&#x1F3A8; <b>Color:</b> black shoes &middot; white hoodie &middot; blue tee</div>"
+        "<div>&#x1F464; <b>Gender:</b> women's running shoes &middot; men's hoodie</div>"
+        "<div>&#x2B50; <b>Sort:</b> best shoes &middot; cheap clothing &middot; expensive shoes</div>"
+        "</div>"
+        "<p style='margin:12px 0 0 0;color:#666;font-size:13px;'>"
+        "&#x1F4A1; Tip: Click <b>View &#x2192;</b> on any product to see full details. "
+        "Say <b>'more'</b> to load more results."
+        "</p></div>"
+    )
+    st.markdown(welcome_html, unsafe_allow_html=True)
+    if st.button("Got it! Let's shop 🛍️", key="welcome_dismiss"):
+        st.session_state.welcomed = True
+        st.rerun()
+# -----------------------------
+# PRODUCT DETAIL VIEW
+# -----------------------------
+if st.session_state.selected_product:
+    display_product_detail(st.session_state.selected_product)
+    st.stop()
 
 # Display chat history
 chat_container = st.container()
@@ -848,6 +963,7 @@ if st.button("🗑️ Clear Chat", key="clear_chat_bottom"):
     st.session_state.messages = []
     st.session_state.last_filters = None
     st.session_state.result_offset = 0
+    st.session_state.selected_product = None
     st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
