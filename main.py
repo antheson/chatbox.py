@@ -737,6 +737,72 @@ def extract_filters(text):
 
 
 # -----------------------------
+# PRODUCT NAME SEARCH
+# -----------------------------
+def search_by_product_name(user_input):
+    """
+    Detect if the user is searching for a specific product by name.
+    Returns a DataFrame of matching rows, or None if not a name search.
+
+    Strategy:
+      1. Strip known trigger phrases ("find", "show me", "search for", etc.)
+      2. Try exact substring match on product names (case-insensitive)
+      3. Fall back to fuzzy token match using difflib for typos / partial names
+    """
+    trigger_phrases = [
+        'find ', 'search for ', 'search ', 'show me ', 'look for ',
+        'looking for ', 'do you have ', 'do you sell ', 'i want ',
+        'i need ', 'get me ', 'show ', 'any '
+    ]
+    query = user_input.lower().strip()
+    for phrase in trigger_phrases:
+        if query.startswith(phrase):
+            query = query[len(phrase):].strip()
+
+    # Must be at least 4 chars to avoid false positives on short filter words
+    if len(query) < 4:
+        return None
+
+    # Skip if query looks like a pure filter (color/category/price words only)
+    filter_words = {
+        'shoes', 'shoe', 'clothing', 'clothes', 'accessories', 'accessory',
+        'cheap', 'expensive', 'best', 'top', 'budget', 'premium', 'running',
+        'casual', 'slides', 'sandals', 'hoodie', 'jacket', 'pants', 'shorts',
+        'black', 'white', 'blue', 'red', 'green', 'pink', 'grey', 'gray',
+        'men', 'women', 'kids', 'under', 'above', 'between', 'more'
+    }
+    query_words = set(query.split())
+    if query_words.issubset(filter_words):
+        return None
+
+    all_names = df['product_name'].dropna().tolist()
+    all_names_lower = [n.lower() for n in all_names]
+
+    # 1. Exact substring match — most reliable
+    exact_mask = df['product_name'].str.lower().str.contains(re.escape(query), na=False)
+    if exact_mask.any():
+        return df[exact_mask]
+
+    # 2. All query words present in name (handles word-order variations)
+    words = [w for w in query.split() if len(w) > 2 and w not in filter_words]
+    if len(words) >= 2:
+        mask = pd.Series([True] * len(df), index=df.index)
+        for w in words:
+            mask = mask & df['product_name'].str.lower().str.contains(re.escape(w), na=False)
+        if mask.any():
+            return df[mask]
+
+    # 3. Fuzzy match — catches typos like "ultraboost" → "Ultraboost 21"
+    matches = get_close_matches(query, all_names_lower, n=5, cutoff=0.45)
+    if matches:
+        matched_rows = df[df['product_name'].str.lower().isin(matches)]
+        if not matched_rows.empty:
+            return matched_rows
+
+    return None
+
+
+# -----------------------------
 # RESPONSE GENERATION
 # -----------------------------
 def get_response(user_input):
@@ -744,6 +810,33 @@ def get_response(user_input):
     categories_list = [cat.lower() for cat in df['category'].dropna().unique()]
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
+
+    # -----------------------------
+    # PRODUCT NAME SEARCH — runs first, before all other logic
+    # -----------------------------
+    name_results = search_by_product_name(user_input)
+    if name_results is not None and not name_results.empty:
+        filters = {'category': None, 'color': None, 'min_price': None,
+                   'max_price': None, 'intent': 'recommend',
+                   'subcategory': None, 'gender': None}
+        st.session_state.last_filters = filters
+        st.session_state.result_offset = 0
+        count = len(name_results)
+        label = f'"{user_input.strip()}"'
+        msg = (
+            f"Found {count} product{'s' if count > 1 else ''} matching {label} 🔍"
+            if count > 1 else
+            f"Here's the exact product for {label} 🎯"
+        )
+        cols_needed = ['product_name', 'category', 'price', 'color',
+                       'popularity_index', 'review_count', 'gender',
+                       'availability', 'description', 'image_url', 'original_price']
+        return {
+            "type": "dataframe",
+            "message": msg,
+            "data": name_results[cols_needed].reset_index(drop=True),
+            "filters": filters
+        }
     
     # -----------------------------
     # "MORE RESULTS" DETECTION
