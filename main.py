@@ -935,7 +935,7 @@ if st.session_state.selected_product:
 chat_container = st.container()
 
 with chat_container:
-    for msg in st.session_state.messages:
+    for msg_idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             content = msg["content"]
             
@@ -953,7 +953,7 @@ with chat_container:
                     if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                         show_examples()
                     elif isinstance(data_value, pd.DataFrame):
-                        display_products(data_value, label="Top Recommendations")
+                        display_products(data_value, label="Top Recommendations", card_key_prefix=f"hist_{msg_idx}")
             else:
                 st.write(content)
 
@@ -996,7 +996,8 @@ if user_input:
                 if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                     show_examples()
                 elif isinstance(data_value, pd.DataFrame):
-                    display_products(data_value, label="Top Recommendations")
+                    display_products(data_value, label="Top Recommendations",
+                                     card_key_prefix=f"new_{len(st.session_state.messages)}")
             
             st.session_state.messages.append({
                 "role": "assistant",
