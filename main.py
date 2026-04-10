@@ -152,32 +152,61 @@ def correct_category_typo(user_input, categories):
     return ' '.join(corrected_words)
 
 def correct_intent_typo(user_input):
-    intent_keywords = {
-        'hello': ['hello', 'hllo', 'helo', 'hellp', 'hallow', 'halo'],
-        'help': ['help', 'halp', 'hlp', 'hepl', 'helpp'],
-        'cheap': ['cheap', 'cheep', 'chap', 'chep', 'cheapp'],
-        'best': ['best', 'bests', 'besst', 'bist', 'bested'],
-        'expensive': ['expensive', 'expensiv', 'expen', 'costly', 'premium', 'luxury'],
-        'categories': ['categories', 'catagories', 'categries', 'catgories', 'categorys'],
-        'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded'],
-        'thank': ['thank', 'thanks', 'thx', 'thankyou', 'thank u', 'tq', 'ty'],
-        'shoes': ['shoes', 'shoees', 'sheos', 'shoess', 'shos', 'shose', 'suoes', 'suoe'],
-        'clothing': ['clothing', 'vlothing', 'cloting', 'clohting', 'clothng', 'clthing',
-                     'clothin', 'clotthing', 'clething', 'cloding', 'clohing', 'cloathing'],
-        'accessories': ['accessories', 'acessories', 'accesories', 'accessorys', 'acessory',
-                        'accessoires', 'accesories', 'accesory'],
-        'slides': ['slides', 'slids', 'slids', 'sldies', 'sldes'],
-        'sandals': ['sandals', 'sandal', 'sandels', 'sandels', 'sandlas'],
-        'running': ['running', 'runing', 'runnin', 'runing', 'runninng'],
-        'casual': ['casual', 'cazual', 'casaul', 'casuel', 'causal'],
-        'unisex': ['unisex', 'unisec', 'unisecs', 'unisexs', 'unisez', 'unisek',
-                   'uniisex', 'unisexe', 'unixex', 'unisax', 'unisix', 'unesex'],
+    # ── Phase 1: phrase-level corrections (multi-word typos) ──
+    phrase_corrections = {
+        'show more': ['show mroe', 'show moer', 'show mor', 'show mre', 'shwo more',
+                      'sohw more', 'show morre', 'shoow more', 'show moore',
+                      'sohw mroe', 'shwo mroe'],
+        'see more':  ['see mroe', 'see moer', 'see mor', 'se more', 'see mre'],
+        'show me more': ['show me mroe', 'show me moer'],
+        'load more': ['laod more', 'loda more', 'load mroe'],
     }
-    words = user_input.lower().split()
+    text = user_input.lower().strip()
+    # First pass: exact full-message match (highest priority, no substring risk)
+    for canonical, typos in phrase_corrections.items():
+        if text in typos:
+            return canonical
+    # Second pass: substring replacement — sort longer typos first to avoid
+    # partial matches (e.g. 'show mor' must not eat 'show morre' before it matches).
+    # Skip if canonical is already present in text to avoid double-replacement.
+    for canonical, typos in phrase_corrections.items():
+        if canonical in text:
+            continue
+        for typo in sorted(typos, key=len, reverse=True):
+            if typo in text:
+                text = text.replace(typo, canonical)
+                break  # only one replacement per canonical per pass
+
+    # ── Phase 2: word-level corrections ──
+    word_corrections = {
+        'hello':       ['hllo', 'helo', 'hellp', 'hallow', 'halo'],
+        'help':        ['halp', 'hlp', 'hepl', 'helpp'],
+        'cheap':       ['cheep', 'chap', 'chep', 'cheapp'],
+        'best':        ['bests', 'besst', 'bist'],
+        'expensive':   ['expensiv', 'expen', 'costly'],
+        'categories':  ['catagories', 'categries', 'catgories', 'categorys'],
+        'recommend':   ['recomend', 'reccomend', 'rekomend', 'recommanded'],
+        'thank':       ['thx', 'thankyou', 'tq', 'ty'],
+        'shoes':       ['shoees', 'sheos', 'shoess', 'shos', 'shose', 'suoes', 'suoe'],
+        'clothing':    ['vlothing', 'cloting', 'clohting', 'clothng', 'clthing',
+                        'clothin', 'clotthing', 'clething', 'cloding', 'clohing', 'cloathing'],
+        'accessories': ['acessories', 'accesories', 'accessorys', 'acessory',
+                        'accessoires', 'accesory'],
+        'slides':      ['slids', 'sldies', 'sldes'],
+        'sandals':     ['sandel', 'sandels', 'sandlas'],
+        'running':     ['runing', 'runnin', 'runninng'],
+        'casual':      ['cazual', 'casaul', 'casuel', 'causal'],
+        'unisex':      ['unisec', 'unisecs', 'unisexs', 'unisez', 'unisek',
+                        'uniisex', 'unisexe', 'unixex', 'unisax', 'unisix', 'unesex'],
+        'more':        ['mroe', 'moer', 'mre'],
+        'next':        ['nxt', 'nexy', 'nect'],
+        'show':        ['shwo', 'sohw', 'shoow'],
+    }
+    words = text.split()
     corrected_words = []
     for word in words:
         corrected = word
-        for keyword, variations in intent_keywords.items():
+        for keyword, variations in word_corrections.items():
             if word in variations:
                 corrected = keyword
                 break
@@ -649,6 +678,10 @@ def search_by_product_name(user_input):
         'unisex', 'unisec', 'unisecs', 'unisexs', 'unisez', 'unisek',
         'uniisex', 'unisexe', 'unixex', 'unisax', 'unisix', 'unesex',
         'rainbow', 'transparent', 'invisible',
+        # pagination phrases — never treat as product names
+        'show', 'next', 'see', 'give', 'load', 'results', 'page', 'please',
+        'show mroe', 'show moer', 'show mor', 'shwo more', 'sohw more',
+        'see mroe', 'see moer', 'nxt', 'nextt', 'nexy', 'nect',
     }
     query_words = set(query.split())
     if query_words.issubset(filter_words):
@@ -708,7 +741,17 @@ def get_response(user_input):
             }
     # ─────────────────────────────────────────────────────────────────────────
 
-    name_results = search_by_product_name(user_input)
+    # ── SHORT-CIRCUIT: if corrected input is a pagination phrase, skip name search ──
+    _pre_check = corrected_input.lower().strip()
+    _PURE_MORE_EARLY = {
+        'more', 'next', 'show more', 'see more', 'give more',
+        'load more', 'more results', 'next page', 'more please',
+        'show me more', 'next results',
+    }
+    if _pre_check in _PURE_MORE_EARLY or re.fullmatch(r'more[.!?]*', _pre_check):
+        name_results = None
+    else:
+        name_results = search_by_product_name(corrected_input)
     if name_results is not None and not name_results.empty:
         filters = {'category': None, 'color': None, 'min_price': None,
                    'max_price': None, 'intent': 'recommend',
