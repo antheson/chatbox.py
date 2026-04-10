@@ -30,26 +30,7 @@ st.markdown("""
         color: #1a237e;
     }
 
-    /* Smart Explanation box */
-    .smart-explanation {
-        background: #f0faf4;
-        border: 1px solid #c8e6c9;
-        border-radius: 8px;
-        padding: 8px 14px;
-        margin-top: 6px;
-        margin-bottom: 4px;
-        font-size: 13px;
-    }
-    .smart-explanation .exp-title {
-        font-weight: 600;
-        color: #2e7d32;
-        margin-bottom: 4px;
-        font-size: 13px;
-    }
-    .smart-explanation .exp-reason {
-        color: #1b5e20;
-        line-height: 1.7;
-    }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -255,124 +236,92 @@ def show_examples():
 # -----------------------------
 def generate_explanation(row, filters):
     """
-    Generate a list of human-readable reasons why this product
-    was recommended, based on the active filters and product data.
-    Returns a list of (emoji, reason_text) tuples.
+    Pick the top 3 most relevant reasons (priority-ordered) and return
+    them as short pill labels, e.g. ["✔ In budget", "⭐ 4.8/5", "🔥 15% off"]
     """
-    reasons = []
+    pills = []
 
-    price       = row.get('price', 0)
-    orig_price  = row.get('original_price', 0)
-    rating      = row.get('popularity_index', 0)
-    color       = row.get('color', '')
-    category    = row.get('category', '')
-    gender      = row.get('gender', '')
+    price        = row.get('price', 0)
+    orig_price   = row.get('original_price', 0)
+    rating       = row.get('popularity_index', 0)
+    color        = row.get('color', '')
+    gender       = row.get('gender', '')
     availability = row.get('availability', '')
     review_count = row.get('review_count', 0)
+    intent       = filters.get('intent', '')
+    max_price    = filters.get('max_price')
+    min_price    = filters.get('min_price')
 
-    # ── Budget / price reasons ──────────────────────────────────────────
-    max_price = filters.get('max_price')
-    min_price = filters.get('min_price')
-
+    # Priority 1 — direct filter matches (most relevant to the user's query)
     if max_price and price and price <= max_price:
-        reasons.append(("✔", f"Within your budget (${price:.0f} ≤ ${max_price:.0f})"))
-    if min_price and max_price and price:
-        reasons.append(("✔", f"Price fits your range (${min_price:.0f}–${max_price:.0f})"))
-    elif min_price and not max_price and price and price >= min_price:
-        reasons.append(("✔", f"Priced above ${min_price:.0f} as requested"))
+        pills.append(f"✔ In budget")
+    elif min_price and max_price and price:
+        pills.append(f"✔ In price range")
 
-    # Discount badge
+    if filters.get('color') and color and filters['color'].lower() in color.lower():
+        pills.append(f"✔ {color} color")
+
+    if filters.get('gender') and gender == filters['gender']:
+        pills.append(f"✔ For {gender}")
+
+    if filters.get('subcategory'):
+        pills.append(f"✔ {filters['subcategory'].capitalize()}")
+
+    # Priority 2 — rating (always useful, keep short)
+    try:
+        r = float(rating)
+        if r >= 4.8:
+            pills.append(f"⭐ {r}/5 rated")
+        elif r >= 4.5:
+            pills.append(f"⭐ {r}/5 rated")
+    except Exception:
+        pass
+
+    # Priority 3 — discount (only if notable)
     try:
         orig = float(orig_price) if orig_price else 0
         cur  = float(price) if price else 0
         if orig > 0 and cur > 0 and orig > cur:
             pct = round((orig - cur) / orig * 100)
-            if pct >= 5:
-                reasons.append(("✔", f"On sale — {pct}% off original price (${orig:.0f} → ${cur:.0f})"))
+            if pct >= 10:
+                pills.append(f"🔥 {pct}% off")
     except Exception:
         pass
 
-    # ── Rating reason ───────────────────────────────────────────────────
-    intent = filters.get('intent', '')
-    try:
-        r = float(rating)
-        if r >= 4.8:
-            reasons.append(("✔", f"Exceptionally rated ({r}/5 ⭐)"))
-        elif r >= 4.5:
-            reasons.append(("✔", f"Highly rated by customers ({r}/5 ⭐)"))
-        elif r >= 4.0:
-            reasons.append(("✔", f"Well rated ({r}/5 ⭐)"))
-        
-        if intent == 'best' and r >= 4.5:
-            reasons.append(("✔", "Among the highest-rated in its category"))
-    except Exception:
-        pass
-
-    # Review count
-    try:
-        rc = float(str(review_count).replace(',', '')) if review_count else 0
-        if rc >= 100:
-            reasons.append(("✔", f"Popular choice — {int(rc):,} customer reviews"))
-        elif rc >= 20:
-            reasons.append(("✔", f"Reviewed by {int(rc)} customers"))
-    except Exception:
-        pass
-
-    # ── Color reason ────────────────────────────────────────────────────
-    filter_color = filters.get('color')
-    if filter_color and color and filter_color.lower() in color.lower():
-        reasons.append(("✔", f"Matches your preferred color ({color})"))
-
-    # ── Category reason ─────────────────────────────────────────────────
-    filter_category = filters.get('category')
-    if filter_category and category and filter_category.lower() in category.lower():
-        reasons.append(("✔", f"In the {category} category you searched for"))
-
-    # ── Subcategory reason ──────────────────────────────────────────────
-    subcat = filters.get('subcategory')
-    if subcat:
-        reasons.append(("✔", f"Matches your style preference: {subcat}"))
-
-    # ── Gender reason ───────────────────────────────────────────────────
-    filter_gender = filters.get('gender')
-    if filter_gender and gender == filter_gender:
-        reasons.append(("✔", f"Designed for {gender}"))
-
-    # ── Availability ────────────────────────────────────────────────────
-    if availability == 'InStock':
-        reasons.append(("✔", "Currently in stock and ready to ship"))
-
-    # ── Price intent reasons ─────────────────────────────────────────────
+    # Priority 4 — intent-specific
     if intent == 'cheap' and price:
-        reasons.append(("✔", f"One of the most affordable options (${price:.0f})"))
+        pills.append(f"💰 ${price:.0f}")
     elif intent == 'expensive' and price:
-        reasons.append(("✔", f"Premium product at ${price:.0f}"))
+        pills.append(f"💎 Premium")
 
-    # ── Fallback if no reasons generated ────────────────────────────────
-    if not reasons:
-        reasons.append(("✔", f"Recommended based on your search"))
-        if rating:
-            try:
-                reasons.append(("✔", f"Rated {float(rating)}/5 ⭐"))
-            except Exception:
-                pass
+    # Priority 5 — availability (only if nothing else)
+    if availability == 'InStock' and len(pills) == 0:
+        pills.append("✔ In stock")
 
-    return reasons
+    # Fallback
+    if not pills:
+        try:
+            r = float(rating)
+            if r > 0:
+                pills.append(f"⭐ {r}/5")
+        except Exception:
+            pass
+        pills.append("✔ Matches search")
+
+    return pills[:3]   # cap at 3 pills max
 
 
-def render_explanation(reasons):
-    """Render the Smart Explanation box as HTML."""
-    reason_lines = "".join(
-        f'<div class="exp-reason">{emoji} {text}</div>'
-        for emoji, text in reasons
+def render_explanation(pills):
+    """Render pills as a single subtle line at the bottom of the card."""
+    pill_html = "".join(
+        f"<span style='background:#e8f5e9;color:#2e7d32;border-radius:12px;"
+        f"padding:2px 9px;font-size:11px;margin-right:5px;white-space:nowrap;'>{p}</span>"
+        for p in pills
     )
-    html = f"""
-    <div class="smart-explanation">
-        <div class="exp-title">💡 Recommended because:</div>
-        {reason_lines}
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='margin-top:3px;margin-bottom:2px;padding-left:2px;'>{pill_html}</div>",
+        unsafe_allow_html=True
+    )
 
 
 # -----------------------------
@@ -444,25 +393,31 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
 
         col_card, col_btn = st.columns([5, 1])
         with col_card:
+            pill_line = ""
+            if filters is not None:
+                pills = generate_explanation(row.to_dict(), filters)
+                pill_html = "".join(
+                    f"<span style='background:#e8f5e9;color:#2e7d32;border-radius:12px;"
+                    f"padding:2px 9px;font-size:11px;margin-right:5px;white-space:nowrap;'>{p}</span>"
+                    for p in pills
+                )
+                pill_line = f"<p style='margin:6px 0 0 0;'>{pill_html}</p>"
+
             st.markdown(
                 f'<div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;">'
                 f'<p style="margin:0 0 4px 0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
                 f'<p style="margin:0;color:#888;font-size:13px;">'
                 f'📂 {category} &nbsp;·&nbsp; 🎨 {color} &nbsp;·&nbsp; '
                 f'<span style="font-weight:700;color:#2e7d32;">{price_str}</span>'
-                f'</p></div>',
+                f'</p>'
+                f'{pill_line}'
+                f'</div>',
                 unsafe_allow_html=True
             )
         with col_btn:
             if st.button("View →", key=f"{card_key_prefix}_{i}_{idx}"):
                 st.session_state.selected_product = row.to_dict()
                 st.rerun()
-
-        # ── ✨ SMART EXPLANATION ─────────────────────────────────────────
-        if filters is not None:
-            reasons = generate_explanation(row.to_dict(), filters)
-            render_explanation(reasons)
-        # ────────────────────────────────────────────────────────────────
 
         st.markdown("<div style='margin-bottom:6px'></div>", unsafe_allow_html=True)
 
