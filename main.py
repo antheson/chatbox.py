@@ -13,24 +13,46 @@ st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")  # icon kept
 # Custom CSS
 st.markdown("""
 <style>
-    /* Sidebar conversation list buttons */
+    /* ── Page background ── */
+    .stApp { background-color: #f7f8fc; }
+
+    /* ── Sidebar styling ── */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    }
+    section[data-testid="stSidebar"] * { color: #e8eaf6 !important; }
+    section[data-testid="stSidebar"] h2 { color: #ffffff !important; letter-spacing: 0.5px; }
+    section[data-testid="stSidebar"] hr { border-color: #2e3a5c !important; }
+
+    /* Sidebar conversation buttons */
     section[data-testid="stSidebar"] .stButton button {
         text-align: left;
-        background-color: transparent;
-        border: 1px solid #e0e0e0;
+        background-color: rgba(255,255,255,0.06) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
         border-radius: 8px;
-        color: inherit;
+        color: #c5cae9 !important;
         font-weight: normal;
         box-shadow: none;
         padding: 6px 12px;
         margin-bottom: 2px;
     }
     section[data-testid="stSidebar"] .stButton button:hover {
-        background-color: #f0f4ff;
-        color: #1a237e;
+        background-color: rgba(255,255,255,0.14) !important;
+        color: #ffffff !important;
     }
 
-    /* Red View → button only */
+    /* ── Chat input bar ── */
+    .stChatInput textarea {
+        border-radius: 12px !important;
+        border: 1.5px solid #c5cae9 !important;
+        background: #ffffff !important;
+    }
+    .stChatInput textarea:focus {
+        border-color: #3949ab !important;
+        box-shadow: 0 0 0 2px rgba(57,73,171,0.15) !important;
+    }
+
+    /* ── Red View → button only ── */
     .view-btn button {
         background-color: #e53935 !important;
         color: white !important;
@@ -42,15 +64,30 @@ st.markdown("""
         background-color: #b71c1c !important;
         color: white !important;
     }
+
+    /* ── "Got it" welcome button ── */
+    .welcome-btn button {
+        background: linear-gradient(90deg, #1a237e, #3949ab) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        padding: 0.4rem 1.2rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Adidas logo + title
 st.markdown(
-    "<div style='display:flex;align-items:center;gap:14px;margin-bottom:4px;'>"
+    "<div style='display:flex;align-items:center;gap:14px;padding:14px 20px;"
+    "background:linear-gradient(90deg,#1a237e 0%,#283593 60%,#e53935 100%);"
+    "border-radius:14px;margin-bottom:18px;'>"
     "<img src='https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/Adidas_Logo.svg/2560px-Adidas_Logo.svg.png'"
-    " style='height:34px;' />"
-    "<span style='font-size:22px;font-weight:700;'>ShopAssist AI &nbsp;·&nbsp; Adidas Recommendation Chatbot</span>"
+    " style='height:32px;filter:brightness(0) invert(1);' />"
+    "<div>"
+    "<div style='font-size:20px;font-weight:700;color:#ffffff;letter-spacing:0.5px;'>ShopAssist AI</div>"
+    "<div style='font-size:12px;color:#c5cae9;margin-top:1px;'>Adidas USA · Smart Product Finder</div>"
+    "</div>"
     "</div>",
     unsafe_allow_html=True
 )
@@ -396,7 +433,12 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
         st.warning("No products found.")
         return
 
-    st.subheader(f"🏆 {label}")
+    st.markdown(
+        f"<div style='background:linear-gradient(90deg,#1a237e,#3949ab);color:white;"
+        f"border-radius:8px;padding:8px 16px;margin-bottom:10px;font-weight:600;font-size:16px;'>"
+        f"🏆 {label}</div>",
+        unsafe_allow_html=True
+    )
 
     for i, (idx, row) in enumerate(df_result.iterrows(), start=1):
         name      = row.get('product_name', 'Unknown')
@@ -423,13 +465,15 @@ def display_products(df_result, label="Recommended Products", card_key_prefix="c
                 pill_line = f"<p style='margin:6px 0 0 0;'>{pill_html}</p>"
 
             st.markdown(
-                f'<div style="border:1px solid #e0e0e0;border-radius:10px;padding:14px 18px;background:#fafafa;">'
+                f'<div style="border:1px solid #e0e0e0;border-left:4px solid #3949ab;'
+                f'border-radius:10px;padding:14px 18px;background:#ffffff;">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;">'
-                f'<p style="margin:0;font-weight:600;font-size:15px;">#{i} &nbsp; {name}{gender_badge}</p>'
+                f'<p style="margin:0;font-weight:600;font-size:15px;color:#1a237e;">#{i} &nbsp; {name}{gender_badge}</p>'
                 f'<span style="font-weight:700;font-size:16px;color:#2e7d32;">{price_str}</span>'
                 f'</div>'
-                f'<p style="margin:4px 0 0 0;color:#888;font-size:13px;">'
-                f'📂 {category} &nbsp;·&nbsp; 🎨 {color}'
+                f'<p style="margin:5px 0 0 0;font-size:13px;color:#666;">'
+                f'<span style="background:#e8eaf6;color:#3949ab;border-radius:4px;padding:1px 7px;font-size:11px;margin-right:6px;">📂 {category}</span>'
+                f'<span style="color:#888;">🎨 {color}</span>'
                 f'</p>'
                 f'{pill_line}'
                 f'</div>',
@@ -1205,27 +1249,28 @@ with st.sidebar:
 # ── Welcome guide ──
 if not st.session_state.welcomed:
     welcome_html = (
-        "<div style='background:linear-gradient(135deg,#e3f2fd,#f3e5f5);"
-        "border-radius:14px;padding:22px 26px;margin-bottom:20px;border:1px solid #bbdefb;'>"
-        "<h3 style='margin:0 0 10px 0;'>&#x1F44B; Welcome to ShopAssist AI!</h3>"
-        "<p style='margin:0 0 10px 0;color:#444;'>I can help you find Adidas products. Here's what you can ask:</p>"
-        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;'>"
-        "<div>&#x1F45F; <b>Shoes:</b> running shoes, casual shoes, slides, golf shoes</div>"
-        "<div>&#x1F455; <b>Clothing:</b> hoodies, tee, jacket, pants, shorts, tights</div>"
-        "<div>&#x1F4B0; <b>Price:</b> shoes under 100 &middot; clothing between 30 and 60</div>"
-        "<div>&#x1F3A8; <b>Color:</b> black shoes &middot; white hoodie &middot; blue tee</div>"
-        "<div>&#x1F464; <b>Gender:</b> women's running shoes &middot; men's hoodie</div>"
-        "<div>&#x2B50; <b>Sort:</b> best shoes &middot; cheap clothing &middot; expensive shoes</div>"
+        "<div style='background:linear-gradient(135deg,#1a237e 0%,#283593 50%,#e53935 100%);"
+        "border-radius:16px;padding:24px 28px;margin-bottom:20px;'>"
+        "<h3 style='margin:0 0 6px 0;color:#ffffff;'>👋 Welcome to ShopAssist AI!</h3>"
+        "<p style='margin:0 0 16px 0;color:#c5cae9;font-size:14px;'>Your smart Adidas product finder. Try asking:</p>"
+        "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;'>"
+        "<div style='background:rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;color:#ffffff;font-size:13px;'>👟 <b>Shoes</b><br><span style='color:#c5cae9;'>running shoes, slides, golf shoes</span></div>"
+        "<div style='background:rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;color:#ffffff;font-size:13px;'>👕 <b>Clothing</b><br><span style='color:#c5cae9;'>hoodies, jacket, pants, tights</span></div>"
+        "<div style='background:rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;color:#ffffff;font-size:13px;'>💰 <b>Price</b><br><span style='color:#c5cae9;'>shoes under 100 · between 30 and 60</span></div>"
+        "<div style='background:rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;color:#ffffff;font-size:13px;'>🎨 <b>Color</b><br><span style='color:#c5cae9;'>black shoes · white hoodie · blue tee</span></div>"
+        "<div style='background:rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;color:#ffffff;font-size:13px;'>👤 <b>Gender</b><br><span style='color:#c5cae9;'>women's running shoes · men's hoodie</span></div>"
+        "<div style='background:rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;color:#ffffff;font-size:13px;'>⭐ <b>Sort</b><br><span style='color:#c5cae9;'>best shoes · cheap clothing</span></div>"
         "</div>"
-        "<p style='margin:12px 0 0 0;color:#666;font-size:13px;'>"
-        "&#x1F4A1; Tip: Click <b>View &#x2192;</b> on any product to see full details. "
-        "Say <b>'more'</b> to load more results."
+        "<p style='margin:14px 0 0 0;color:#c5cae9;font-size:12px;'>"
+        "💡 Click <b style='color:#fff;'>View →</b> for details &nbsp;·&nbsp; Say <b style='color:#fff;'>more</b> to load more results"
         "</p></div>"
     )
     st.markdown(welcome_html, unsafe_allow_html=True)
-    if st.button("Got it! Let's shop \U0001f6cd\ufe0f", key="welcome_dismiss"):
+    st.markdown('<div class="welcome-btn">', unsafe_allow_html=True)
+    if st.button("Got it! Let's shop 🛍️", key="welcome_dismiss"):
         st.session_state.welcomed = True
         st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ── Product detail view ──
 if st.session_state.selected_product:
