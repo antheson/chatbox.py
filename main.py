@@ -708,6 +708,28 @@ def get_response(user_input):
     if filters['category']:
         result = result[result['category'].str.contains(filters['category'], case=False, na=False)]
 
+    # Apply color / gender / price BEFORE subcategory splitting
+    # so multi-combo frames all inherit these filters correctly
+    if filters.get('color_searched') and filters['color'] is None:
+        searched = filters['color_searched']
+        available = 'black, white, blue, red, green, yellow, pink, purple, grey, beige, gold, burgundy, multicolor'
+        return {
+            "type": "text",
+            "message": f"Sorry, we don't have any '{searched}' products. 😊 Available colors: {available}.",
+            "data": None
+        }
+    if filters['color']:
+        result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
+
+    if filters.get('gender'):
+        result = result[result['gender'] == filters['gender']]
+
+    if filters['min_price']:
+        result = result[result['price'] >= filters['min_price']]
+
+    if filters['max_price']:
+        result = result[result['price'] <= filters['max_price']]
+
     # Subcategory: filter by product name using accurate dataset keywords
     def apply_single_subcat(base_df, name_keywords, subcat_category, main_category_filter):
         """Filter base_df by subcategory name keywords and auto-category."""
@@ -723,7 +745,7 @@ def get_response(user_input):
     all_subcats = filters.get('all_matched_subcats')
 
     if all_subcats and len(all_subcats) > 1:
-        # Multi-combo: gather results from each subcat separately, then combine + random sample
+        # Multi-combo: each frame now inherits color/gender/price already filtered above
         import random
         frames = []
         subcat_names = []
@@ -762,27 +784,6 @@ def get_response(user_input):
         result = apply_single_subcat(result, filters['subcategory_name_keywords'],
                                      filters.get('subcategory_category'), filters['category'])
 
-    if filters.get('color_searched') and filters['color'] is None:
-        # Color was searched but doesn't exist in dataset (e.g. "rainbow")
-        searched = filters['color_searched']
-        available = 'black, white, blue, red, green, yellow, pink, purple, grey, beige, gold, burgundy, multicolor'
-        return {
-            "type": "text",
-            "message": f"Sorry, we don't have any '{searched}' products. 😊 Available colors: {available}.",
-            "data": None
-        }
-    if filters['color']:
-        result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
-
-    if filters.get('gender'):
-        result = result[result['gender'] == filters['gender']]
-
-    if filters['min_price']:
-        result = result[result['price'] >= filters['min_price']]
-
-    if filters['max_price']:
-        result = result[result['price'] <= filters['max_price']]
-    
     # Check if we have results
     if result.empty:
         # Build helpful message
