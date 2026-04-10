@@ -134,7 +134,16 @@ def correct_intent_typo(user_input):
         'expensive': ['expensive', 'expensiv', 'expen', 'costly', 'premium', 'luxury'],
         'categories': ['categories', 'catagories', 'categries', 'catgories', 'categorys'],
         'recommend': ['recommend', 'recomend', 'reccomend', 'rekomend', 'recommanded'],
-        'thank': ['thank', 'thanks', 'thx', 'thankyou', 'thank u', 'tq', 'ty']
+        'thank': ['thank', 'thanks', 'thx', 'thankyou', 'thank u', 'tq', 'ty'],
+        'shoes': ['shoes', 'shoees', 'sheos', 'shoess', 'shos', 'shose', 'suoes', 'suoe'],
+        'clothing': ['clothing', 'vlothing', 'cloting', 'clohting', 'clothng', 'clthing',
+                     'clothin', 'clotthing', 'clething', 'cloding', 'clohing', 'cloathing'],
+        'accessories': ['accessories', 'acessories', 'accesories', 'accessorys', 'acessory',
+                        'accessoires', 'accesories', 'accesory'],
+        'slides': ['slides', 'slids', 'slids', 'sldies', 'sldes'],
+        'sandals': ['sandals', 'sandal', 'sandels', 'sandels', 'sandlas'],
+        'running': ['running', 'runing', 'runnin', 'runing', 'runninng'],
+        'casual': ['casual', 'cazual', 'casaul', 'casuel', 'causal'],
     }
     
     words = user_input.lower().split()
@@ -353,14 +362,34 @@ def extract_filters(text):
     # -----------------------------
     # COLOR DETECTION
     # -----------------------------
-    color_keywords = [
-        'black', 'white', 'blue', 'red', 'green', 'yellow',
-        'pink', 'purple', 'grey', 'gray', 'beige', 'gold', 'orange', 'brown'
-    ]
+    # Map user color terms to actual dataset color values
+    color_alias_map = {
+        'black': 'Black',
+        'white': 'White',
+        'blue': 'Blue',
+        'red': 'Red',
+        'green': 'Green',
+        'yellow': 'Yellow',
+        'pink': 'Pink',
+        'purple': 'Purple',
+        'grey': 'Grey',
+        'gray': 'Grey',
+        'beige': 'Beige',
+        'gold': 'Gold',
+        'orange': 'Red',       # closest in dataset
+        'brown': 'Beige',      # closest in dataset
+        'burgundy': 'Burgundy',
+        'multicolor': 'Multicolor',
+        'multi color': 'Multicolor',
+        'colorful': 'Multicolor',
+        'multi': 'Multicolor',
+        'rainbow': None,        # not in dataset → trigger no-result message
+    }
 
-    for color in color_keywords:
-        if re.search(rf'\b{color}\b', text_lower):
-            filters['color'] = color
+    for user_color, dataset_color in color_alias_map.items():
+        if re.search(rf'\b{re.escape(user_color)}\b', text_lower):
+            filters['color'] = dataset_color   # None means "searched but not found"
+            filters['color_searched'] = user_color
             break
 
     # -----------------------------
@@ -469,7 +498,7 @@ def get_response(user_input):
 
     # Only use ML if no filters detected
     model_intent = "unknown"
-    if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price']:
+    if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price'] and not filters.get('subcategory'):
         try:
             model_intent = predict_intent(corrected_input)
         except:
@@ -493,7 +522,7 @@ def get_response(user_input):
         }
     
     # If user clearly asking for products → skip greeting
-    if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price']:
+    if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price'] and not filters.get('subcategory'):
     
         if model_intent == "greeting":
             return {
@@ -551,6 +580,15 @@ def get_response(user_input):
         if filters['subcategory'] in shoe_subcats and not filters['category']:
             result = result[result['category'].str.contains('Shoes', case=False, na=False)]
 
+    if filters.get('color_searched') and filters['color'] is None:
+        # Color was searched but doesn't exist in dataset (e.g. "rainbow")
+        searched = filters['color_searched']
+        available = 'black, white, blue, red, green, yellow, pink, purple, grey, beige, gold, burgundy, multicolor'
+        return {
+            "type": "text",
+            "message": f"Sorry, we don't have any '{searched}' products. 😊 Available colors: {available}.",
+            "data": None
+        }
     if filters['color']:
         result = result[result['color'].str.contains(filters['color'], case=False, na=False)]
 
