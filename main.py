@@ -170,6 +170,8 @@ def correct_intent_typo(user_input):
         'sandals': ['sandals', 'sandal', 'sandels', 'sandels', 'sandlas'],
         'running': ['running', 'runing', 'runnin', 'runing', 'runninng'],
         'casual': ['casual', 'cazual', 'casaul', 'casuel', 'causal'],
+        'unisex': ['unisex', 'unisec', 'unisecs', 'unisexs', 'unisez', 'unisek',
+                   'uniisex', 'unisexe', 'unixex', 'unisax', 'unisix', 'unesex'],
     }
     words = user_input.lower().split()
     corrected_words = []
@@ -644,7 +646,9 @@ def search_by_product_name(user_input):
         'casual', 'slides', 'sandals', 'hoodie', 'jacket', 'pants', 'shorts',
         'black', 'white', 'blue', 'red', 'green', 'pink', 'grey', 'gray',
         'men', 'women', 'kids', 'under', 'above', 'between', 'more',
-        'unisex', 'rainbow', 'transparent', 'invisible'
+        'unisex', 'unisec', 'unisecs', 'unisexs', 'unisez', 'unisek',
+        'uniisex', 'unisexe', 'unixex', 'unisax', 'unisix', 'unesex',
+        'rainbow', 'transparent', 'invisible',
     }
     query_words = set(query.split())
     if query_words.issubset(filter_words):
