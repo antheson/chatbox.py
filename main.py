@@ -13,33 +13,21 @@ st.set_page_config(page_title="ShopAssist AI", page_icon="🛍️")
 # Custom CSS to fix button at bottom
 st.markdown("""
 <style>
-    /* Fix clear chat button at bottom */
-    .fixed-bottom {
-        position: fixed;
-        bottom: 80px;
-        right: 20px;
-        z-index: 999;
+    /* Sidebar conversation list buttons */
+    section[data-testid="stSidebar"] .stButton button {
+        text-align: left;
+        background-color: transparent;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        color: inherit;
+        font-weight: normal;
+        box-shadow: none;
+        padding: 6px 12px;
+        margin-bottom: 2px;
     }
-    
-    /* Adjust main content to not overlap with button */
-    .main > div {
-        padding-bottom: 100px;
-    }
-    
-    /* Style the button */
-    .stButton button {
-        background-color: #ff4b4b;
-        color: white;
-        border-radius: 20px;
-        padding: 8px 20px;
-        font-weight: bold;
-        border: none;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    
-    .stButton button:hover {
-        background-color: #ff0000;
-        color: white;
+    section[data-testid="stSidebar"] .stButton button:hover {
+        background-color: #f0f4ff;
+        color: #1a237e;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -886,8 +874,14 @@ def get_response(user_input):
     }
 
 # -----------------------------
-# CHAT UI
+# CHAT UI — with conversation history
 # -----------------------------
+
+# ── Session state ──
+if "all_conversations" not in st.session_state:
+    st.session_state.all_conversations = []   # list of {id, title, messages}
+if "active_conv_id" not in st.session_state:
+    st.session_state.active_conv_id = None
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "last_filters" not in st.session_state:
@@ -899,9 +893,94 @@ if "selected_product" not in st.session_state:
 if "welcomed" not in st.session_state:
     st.session_state.welcomed = False
 
-# -----------------------------
-# WELCOME GUIDE (shown once on first load)
-# -----------------------------
+# ── Helpers ──
+import uuid, datetime
+
+def save_current_conv():
+    """Persist current messages back into all_conversations."""
+    if not st.session_state.messages:
+        return
+    cid = st.session_state.active_conv_id
+    if cid is None:
+        return
+    for conv in st.session_state.all_conversations:
+        if conv["id"] == cid:
+            conv["messages"] = list(st.session_state.messages)
+            return
+
+def new_conversation():
+    """Save current, then start fresh."""
+    save_current_conv()
+    cid = str(uuid.uuid4())[:8]
+    now = datetime.datetime.now().strftime("%b %d, %H:%M")
+    st.session_state.all_conversations.append({
+        "id":       cid,
+        "title":    f"Chat {now}",
+        "messages": []
+    })
+    st.session_state.active_conv_id = cid
+    st.session_state.messages       = []
+    st.session_state.last_filters   = None
+    st.session_state.result_offset  = 0
+    st.session_state.selected_product = None
+
+def load_conversation(cid):
+    """Switch to an existing conversation."""
+    save_current_conv()
+    for conv in st.session_state.all_conversations:
+        if conv["id"] == cid:
+            st.session_state.active_conv_id = cid
+            st.session_state.messages       = list(conv["messages"])
+            st.session_state.last_filters   = None
+            st.session_state.result_offset  = 0
+            st.session_state.selected_product = None
+            return
+
+def auto_title(messages):
+    """Generate a title from the first user message."""
+    for m in messages:
+        if m["role"] == "user" and isinstance(m["content"], str):
+            t = m["content"][:28]
+            return t + ("…" if len(m["content"]) > 28 else "")
+    return "New Chat"
+
+# ── Bootstrap: ensure there's always one active conversation ──
+if st.session_state.active_conv_id is None:
+    new_conversation()
+
+# ── Sidebar ──
+with st.sidebar:
+    st.markdown("## 💬 Conversations")
+    if st.button("➕  New Chat", use_container_width=True, key="new_chat_btn"):
+        new_conversation()
+        st.rerun()
+
+    st.markdown("---")
+    convs = st.session_state.all_conversations
+    # Show newest first
+    for conv in reversed(convs):
+        title = auto_title(conv["messages"]) if conv["messages"] else conv["title"]
+        is_active = conv["id"] == st.session_state.active_conv_id
+        label = f"{'▶ ' if is_active else ''}{title}"
+        if st.button(label, key=f"conv_{conv['id']}", use_container_width=True):
+            load_conversation(conv["id"])
+            st.rerun()
+
+    if len(convs) > 1:
+        st.markdown("---")
+        if st.button("🗑️ Delete this chat", use_container_width=True, key="del_conv_btn"):
+            cid = st.session_state.active_conv_id
+            st.session_state.all_conversations = [
+                c for c in st.session_state.all_conversations if c["id"] != cid
+            ]
+            # Switch to last remaining
+            if st.session_state.all_conversations:
+                load_conversation(st.session_state.all_conversations[-1]["id"])
+            else:
+                new_conversation()
+            st.rerun()
+
+# ── Welcome guide ──
 if not st.session_state.welcomed:
     welcome_html = (
         "<div style='background:linear-gradient(135deg,#e3f2fd,#f3e5f5);"
@@ -922,30 +1001,25 @@ if not st.session_state.welcomed:
         "</p></div>"
     )
     st.markdown(welcome_html, unsafe_allow_html=True)
-    if st.button("Got it! Let's shop 🛍️", key="welcome_dismiss"):
+    if st.button("Got it! Let's shop \U0001f6cd\ufe0f", key="welcome_dismiss"):
         st.session_state.welcomed = True
         st.rerun()
-# -----------------------------
-# PRODUCT DETAIL VIEW
-# -----------------------------
+
+# ── Product detail view ──
 if st.session_state.selected_product:
     display_product_detail(st.session_state.selected_product)
     st.stop()
 
-# Display chat history
+# ── Render current conversation ──
 chat_container = st.container()
-
 with chat_container:
     for msg_idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             content = msg["content"]
-            
             if isinstance(content, dict):
                 st.write(content["message"])
-                
-                data_value = content["data"]
+                data_value   = content["data"]
                 response_type = content.get("type", "")
-                
                 if response_type == "categories":
                     display_categories()
                 elif response_type == "help":
@@ -954,29 +1028,16 @@ with chat_container:
                     if isinstance(data_value, str) and data_value == "SHOW_EXAMPLES":
                         show_examples()
                     elif isinstance(data_value, pd.DataFrame):
-                        display_products(data_value, label="Top Recommendations", card_key_prefix=f"hist_{msg_idx}")
+                        display_products(data_value, label="Top Recommendations",
+                                         card_key_prefix=f"hist_{msg_idx}")
             else:
                 st.write(content)
 
-# Fixed Clear Chat button at bottom
-st.markdown('<div class="fixed-bottom">', unsafe_allow_html=True)
-if st.button("🗑️ Clear Chat", key="clear_chat_bottom"):
-    st.session_state.messages = []
-    st.session_state.last_filters = None
-    st.session_state.result_offset = 0
-    st.session_state.selected_product = None
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-# User input
+# ── User input ──
 user_input = st.chat_input("Ask for recommendations...")
 
 if user_input:
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
-
+    st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.write(user_input)
 
@@ -985,10 +1046,8 @@ if user_input:
     with st.chat_message("assistant"):
         if isinstance(response, dict):
             st.write(response["message"])
-            
-            data_value = response["data"]
+            data_value    = response["data"]
             response_type = response.get("type", "")
-            
             if response_type == "categories":
                 display_categories()
             elif response_type == "help":
@@ -999,16 +1058,11 @@ if user_input:
                 elif isinstance(data_value, pd.DataFrame):
                     display_products(data_value, label="Top Recommendations",
                                      card_key_prefix=f"new_{len(st.session_state.messages)}")
-            
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response
-            })
+            st.session_state.messages.append({"role": "assistant", "content": response})
         else:
             st.write(str(response))
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": str(response)
-            })
-    
+            st.session_state.messages.append({"role": "assistant", "content": str(response)})
+
+    # Auto-save after every turn
+    save_current_conv()
     st.rerun()
