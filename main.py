@@ -511,16 +511,15 @@ def extract_filters(text):
         filters['subcategory'] = matched_subcats[0][0]
         filters['subcategory_name_keywords'] = matched_subcats[0][1]
         filters['subcategory_category'] = matched_subcats[0][2]
+        filters['all_matched_subcats'] = None
     elif len(matched_subcats) > 1:
-        # Multi-category combo: randomly pick one
-        import random
-        chosen = random.choice(matched_subcats)
-        filters['subcategory'] = chosen[0]
-        filters['subcategory_name_keywords'] = chosen[1]
-        filters['subcategory_category'] = chosen[2]
-        filters['multi_subcat_note'] = f"Showing results for '{chosen[0]}' (randomly picked from your request!)"
-    elif not matched_subcats:
-        pass  # no subcategory detected
+        # Multi-category combo: store all, handle in get_response
+        filters['subcategory'] = matched_subcats[0][0]
+        filters['subcategory_name_keywords'] = matched_subcats[0][1]
+        filters['subcategory_category'] = matched_subcats[0][2]
+        filters['all_matched_subcats'] = matched_subcats   # full list for combined results
+    else:
+        filters['all_matched_subcats'] = None
 
     # -----------------------------
     # INTENT DETECTION
@@ -637,18 +636,58 @@ def get_response(user_input):
         result = result[result['category'].str.contains(filters['category'], case=False, na=False)]
 
     # Subcategory: filter by product name using accurate dataset keywords
-    if filters.get('subcategory') and filters.get('subcategory_name_keywords'):
-        kws = filters['subcategory_name_keywords']
+    def apply_single_subcat(base_df, name_keywords, subcat_category, main_category_filter):
+        """Filter base_df by subcategory name keywords and auto-category."""
+        kws = name_keywords
         pattern = '|'.join(re.escape(kw) for kw in kws)
-        subcategory_result = result[result['product_name'].str.contains(pattern, case=False, na=False)]
+        sub_result = base_df[base_df['product_name'].str.contains(pattern, case=False, na=False)]
+        if sub_result.empty:
+            sub_result = base_df  # fallback: don't restrict by name
+        if subcat_category and not main_category_filter:
+            sub_result = sub_result[sub_result['category'].str.contains(subcat_category, case=False, na=False)]
+        return sub_result
 
-        if not subcategory_result.empty:
-            result = subcategory_result
+    all_subcats = filters.get('all_matched_subcats')
 
-        # Auto-restrict to correct main category based on subcat type
-        subcat_category = filters.get('subcategory_category')
-        if subcat_category and not filters['category']:
-            result = result[result['category'].str.contains(subcat_category, case=False, na=False)]
+    if all_subcats and len(all_subcats) > 1:
+        # Multi-combo: gather results from each subcat separately, then combine + random sample
+        import random
+        frames = []
+        subcat_names = []
+        for (subcat_name, name_kws, subcat_cat) in all_subcats:
+            part = apply_single_subcat(result, name_kws, subcat_cat, filters['category'])
+            if not part.empty:
+                frames.append(part)
+                subcat_names.append(subcat_name)
+
+        if frames:
+            import random
+            limit = 5
+            n = len(frames)
+            # Distribute 5 slots as evenly as possible across all subcats
+            base = limit // n
+            remainder = limit % n
+            counts = [base + (1 if i < remainder else 0) for i in range(n)]
+            # Randomly shuffle each frame then take its allocated count
+            parts = []
+            for frame, count in zip(frames, counts):
+                shuffled = frame.sample(frac=1, random_state=None).reset_index(drop=True)
+                parts.append(shuffled.head(count))
+            # Interleave: zip rows from each part alternately so they mix visually
+            interleaved = []
+            max_len = max(len(p) for p in parts)
+            for i in range(max_len):
+                for p in parts:
+                    if i < len(p):
+                        interleaved.append(p.iloc[i])
+            result = pd.DataFrame(interleaved).drop_duplicates().reset_index(drop=True)
+            filters['multi_subcat_note'] = f"Showing a mix of: {' + '.join(subcat_names)} 🎲"
+            filters['multi_subcat_limit_applied'] = True  # skip re-slicing later
+        # (if frames empty, result stays as full df)
+
+    elif filters.get('subcategory') and filters.get('subcategory_name_keywords'):
+        result = apply_single_subcat(result, filters['subcategory_name_keywords'],
+                                     filters.get('subcategory_category'), filters['category'])
 
     if filters.get('color_searched') and filters['color'] is None:
         # Color was searched but doesn't exist in dataset (e.g. "rainbow")
@@ -696,14 +735,16 @@ def get_response(user_input):
             "data": None
         }
     
-    # Sort based on intent
+    # Sort based on intent — for multi-combo, keep random shuffle order
+    is_multi_combo = bool(filters.get('all_matched_subcats') and len(filters['all_matched_subcats']) > 1)
+
     if filters['intent'] == 'expensive':
         sorted_result = result[result['price'] > 0].sort_values('price', ascending=False)
         msg = f"Here are the most expensive products"
     elif filters['intent'] == 'cheap':
         sorted_result = result[result['price'] > 0].sort_values('price')
         msg = f"Here are budget-friendly products"
-    elif filters['intent'] == 'best':
+    elif filters['intent'] == 'best' and not is_multi_combo:
         sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
         msg = f"Here are the highest-rated products"
     elif filters['intent'] == 'price_range':
@@ -717,11 +758,19 @@ def get_response(user_input):
         else:
             msg = f"Here are recommended products"
     else:
-        sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
-        msg = f"Here are recommended products"
+        if is_multi_combo:
+            # Keep the random shuffle — don't re-sort
+            sorted_result = result
+            msg = f"Here's a random mix of products"
+        else:
+            sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
+            msg = f"Here are recommended products"
 
-    # Slice with offset
-    page_result = sorted_result.iloc[offset:offset + limit]
+    # Slice with offset — for multi-combo the result is already sized
+    if filters.get('multi_subcat_limit_applied') and offset == 0:
+        page_result = result  # already interleaved to correct size
+    else:
+        page_result = sorted_result.iloc[offset:offset + limit]
 
     if page_result.empty:
         st.session_state.result_offset = max(0, offset - limit)
