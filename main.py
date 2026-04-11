@@ -611,7 +611,7 @@ def extract_filters(text):
         filters['intent'] = 'cheap'
     elif 'expensive' in text_lower or 'premium' in text_lower or 'luxury' in text_lower:
         filters['intent'] = 'expensive'
-    elif 'best' in text_lower or 'top' in text_lower or 'highest rated' in text_lower:
+    elif ('best' in text_lower or 'top' in text_lower or 'highest rated' in text_lower) and not (filters['min_price'] or filters['max_price']):
         filters['intent'] = 'best'
     elif filters['min_price'] or filters['max_price']:
         filters['intent'] = 'price_range'
