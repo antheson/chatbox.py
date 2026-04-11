@@ -4,6 +4,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import LogisticRegression
 from difflib import get_close_matches
 import re
+import random
 
 # -----------------------------
 # PAGE SETUP
@@ -623,6 +624,112 @@ def extract_filters(text):
 # RESPONSE GENERATION
 # -----------------------------
 def get_response(user_input):
+
+    # ── NATURAL LANGUAGE / EMOTIONAL RESPONSES ────────────────────────────────
+    _nl = user_input.lower().strip()
+
+    _empty_filters = {
+        'category': None, 'color': None, 'min_price': None,
+        'max_price': None, 'intent': 'recommend',
+        'subcategory': None, 'gender': None
+    }
+
+    _emotional_map = [
+        # Negative feelings toward bot
+        (r'\b(i hate|i don\'?t like|i dislike|i don\'?t love)\b.*(you|u|this|app|bot)',
+         ["Aww, sorry to hear that 😔 I'll try to do better! How can I help you today?",
+          "Sorry for the bad experience 🙏 Let me make it up to you — what are you looking for?",
+          "That's fair, I'm still learning! 😅 How can I assist you better?"]),
+
+        # Frustration / anger
+        (r'\b(this is (stupid|useless|trash|terrible|awful|bad)|so (stupid|useless|annoying)|ugh|argh|wtf|what the hell)\b',
+         ["Sorry for the frustration 😔 Let me try again — what are you looking for?",
+          "I hear you, that must be annoying 😅 Tell me what you need and I'll do my best!",
+          "Yikes, my bad! 🙈 Let's start fresh — what can I help you find?"]),
+
+        # Boredom
+        (r'\b(i\'?m bored|so bored|bored)\b',
+         ["Let's fix that! 😄 How about checking out some fresh Adidas drops? Try 'best shoes' or 'new clothing'!",
+          "Bored? Let's go shopping! 🛍️ Try asking for 'best running shoes' or 'cheap clothing under 50'!"]),
+
+        # Sadness
+        (r'\b(i\'?m sad|feeling (sad|down|low)|i feel (sad|bad|terrible))\b',
+         ["Aw, sending good vibes your way 💙 Retail therapy? Let me help you find something nice!",
+          "Sorry you're feeling down 😔 Maybe some fresh kicks will cheer you up? Try 'best shoes'!"]),
+
+        # Compliments / love
+        (r'\b(i love|i like|you\'?re (great|awesome|amazing|the best|cool)|good bot|great job|well done)\b',
+         ["Aww thank you, that made my day! 😊🙏 What can I help you find?",
+          "You're too kind! 🥰 Happy to help — what are you shopping for today?",
+          "That means a lot! 😄 Now let's find you something awesome — what do you need?"]),
+
+        # Confusion / lost
+        (r'\b(i\'?m (confused|lost|not sure|unsure)|don\'?t (understand|know)|no idea|what do i (do|search|ask))\b',
+         ["No worries! 😊 You can ask things like 'shoes under 100', 'best running shoes', or 'white hoodie'. What sounds good?",
+          "Let me help! 🙌 Try searching by category (shoes, clothing), color (black, white), price (under 50), or style (running, casual)!"]),
+
+        # Complaining about price
+        (r'\b(too expensive|so (pricey|costly|expensive)|can\'?t afford|out of (my )?budget)\b',
+         ["No problem! 💰 Try 'cheap shoes' or 'clothing under 30' — I'll find you the best deals!",
+          "Let's find something wallet-friendly! 😄 Try 'budget shoes' or 'clothing under 50'!"]),
+
+        # Excitement
+        (r'\b(i\'?m (excited|pumped|hyped|stoked)|let\'?s (go|shop|do this)|woo+|yay|awesome)\b',
+         ["Love the energy! 🔥 Let's find you something amazing — what are you shopping for?",
+          "Let's gooo! 🛍️🔥 What kind of Adidas gear are we hunting today?"]),
+
+        # Casual greetings (extra)
+        (r'^(yo+|sup|wassup|what\'?s up|howdy|hiya|heya)[\s!?]*$',
+         ["Yo! 👋 Ready to shop? Tell me what you're looking for!",
+          "Hey hey! 😄 What can I help you find today?",
+          "Sup! 🛍️ Looking for something from Adidas? Just ask!"]),
+
+        # Goodbye
+        (r'\b(bye|goodbye|see you|see ya|cya|later|gotta go|take care)\b',
+         ["Bye! 👋 Come back anytime you need gear recommendations!",
+          "See ya! 😊 Happy shopping whenever you're ready!",
+          "Take care! 🙌 We'll be here when you want to find your next favourite piece!"]),
+
+        # Compliment on product / good taste
+        (r'\b(nice|looks good|love it|perfect|exactly what i (wanted|needed)|that\'?s (great|perfect|awesome))\b',
+         ["Great taste! 😍 Want me to find more like that? Just say the word!",
+          "Glad you like it! 🎉 Want to see similar items or something in a different color?",
+          "Right?! 🔥 Adidas never misses. Want more recommendations?"]),
+
+        # Asking how the bot is
+        (r'\b(how are you|how\'?s it going|how do you do|you ok|you good)\b',
+         ["I'm doing great, ready to help you find some fire Adidas gear! 🔥 What are you looking for?",
+          "All good on my end! 😄 More importantly — what can I help you find today?",
+          "Loving life and ready to shop! 🛍️ What are you searching for?"]),
+
+        # Complaining nothing matches / empty results frustration
+        (r'\b(nothing (works|shows|comes up)|can\'?t find (anything|it)|no results|not (finding|showing))\b',
+         ["Hmm, let me help! 🤔 Try broader terms like 'shoes' or 'clothing', or adjust the price range.",
+          "Let's try again! 😊 Keep it simple — like 'black shoes' or 'hoodie under 60' — and I'll do my best!"]),
+
+        # Indecisive
+        (r'\b(i don\'?t know (what|which)|can\'?t decide|not sure what (to (get|buy|pick)))\b',
+         ["No worries! 😄 Tell me your budget and I'll pick the best for you!",
+          "Let me help you decide! 🛍️ What's your budget — and do you prefer shoes or clothing?",
+          "I got you! 💪 Just tell me: shoes or clothing? And what's your price range?"]),
+
+        # Sarcasm / testing the bot
+        (r'\b(you\'?re (so|really) (dumb|stupid|useless|bad)|worst (bot|app|assistant))\b',
+         ["Ouch! 😅 I promise I'm trying my best. Want to give me another shot?",
+          "Fair enough, I'll take that as feedback! 😄 What can I help you find?",
+          "Haha, I deserved that one! 😂 Let me redeem myself — what are you looking for?"]),
+    ]
+
+    for pattern, replies in _emotional_map:
+        if re.search(pattern, _nl):
+            return {
+                "type": "text",
+                "message": random.choice(replies),
+                "data": None,
+                "filters": _empty_filters
+            }
+    # ── END NATURAL LANGUAGE RESPONSES ───────────────────────────────────────
+
     categories_list = [cat.lower() for cat in df['category'].dropna().unique()]
     corrected_input = correct_category_typo(user_input, categories_list)
     corrected_input = correct_intent_typo(corrected_input)
@@ -695,7 +802,6 @@ def get_response(user_input):
 
     if not filters['category'] and not filters['color'] and not filters['min_price'] and not filters['max_price'] and not filters.get('subcategory') and not filters.get('gender'):
         if model_intent == "thanks":
-            import random
             return {"type": "text", "message": random.choice(["You're very welcome! 😊", "My pleasure! 🛍️", "Anytime! 🙌"]), "data": None, "filters": filters}
         if model_intent == "help":
             return {"type": "help", "message": "Here are some things you can ask me 😊", "data": None, "filters": filters}
@@ -806,7 +912,6 @@ def get_response(user_input):
         sorted_result = result[result['price'] > 0].sort_values('price')
         msg = "Here are budget-friendly products"
     elif filters['intent'] == 'best' and not is_multi_combo:
-        # Sort by highest rating; price filter already applied to `result` above
         sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
         if filters['min_price'] and filters['max_price']:
             msg = f"Here are the highest-rated products between ${filters['min_price']:.0f} and ${filters['max_price']:.0f}"
