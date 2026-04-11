@@ -611,7 +611,7 @@ def extract_filters(text):
         filters['intent'] = 'cheap'
     elif 'expensive' in text_lower or 'premium' in text_lower or 'luxury' in text_lower:
         filters['intent'] = 'expensive'
-    elif ('best' in text_lower or 'top' in text_lower or 'highest rated' in text_lower) and not (filters['min_price'] or filters['max_price']):
+    elif 'best' in text_lower or 'top' in text_lower or 'highest rated' in text_lower:
         filters['intent'] = 'best'
     elif filters['min_price'] or filters['max_price']:
         filters['intent'] = 'price_range'
@@ -806,8 +806,16 @@ def get_response(user_input):
         sorted_result = result[result['price'] > 0].sort_values('price')
         msg = "Here are budget-friendly products"
     elif filters['intent'] == 'best' and not is_multi_combo:
+        # Sort by highest rating; price filter already applied to `result` above
         sorted_result = result[result['popularity_index'] > 0].sort_values('popularity_index', ascending=False)
-        msg = "Here are the highest-rated products"
+        if filters['min_price'] and filters['max_price']:
+            msg = f"Here are the highest-rated products between ${filters['min_price']:.0f} and ${filters['max_price']:.0f}"
+        elif filters['max_price']:
+            msg = f"Here are the highest-rated products under ${filters['max_price']:.0f}"
+        elif filters['min_price']:
+            msg = f"Here are the highest-rated products above ${filters['min_price']:.0f}"
+        else:
+            msg = "Here are the highest-rated products"
     elif filters['intent'] == 'price_range':
         sorted_result = result[result['price'] > 0].sort_values('price')
         if filters['min_price'] and filters['max_price']:
